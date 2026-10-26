@@ -11,7 +11,10 @@ pass=0 failed=0 warned=0
 ok()   { pass=$((pass + 1)); printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { failed=$((failed + 1)); printf '  \033[31m✗\033[0m %s\n' "$1"; }
 warn() { warned=$((warned + 1)); printf '  \033[33m!\033[0m %s\n' "$1"; }
-check() { local name="$1"; shift; if "$@" >/dev/null 2>&1; then ok "$name"; else bad "$name"; fi; }
+check() {
+  local name="$1" out; shift
+  if out="$("$@" 2>&1)"; then ok "$name"; else bad "$name"; printf '%s\n' "$out" | tail -5 | sed 's/^/      /'; fi
+}
 as_user() { sudo -u "$user" -H env XDG_RUNTIME_DIR="/tmp/forge-check-$user" "$@"; }
 mkdir -p "/tmp/forge-check-$user" && chown "$user" "/tmp/forge-check-$user"
 
