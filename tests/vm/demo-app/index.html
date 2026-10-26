@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fokus</title>
+  <link rel="stylesheet" href="forge.css">
+  <link rel="stylesheet" href="/_forge/theme.css">
+  <style>
+    body { min-height: 100vh; }
+    .app { max-width: 720px; padding-top: 32px; }
+    header { display: flex; align-items: center; justify-content: space-between; }
+    .chips { display: flex; gap: 6px; }
+    .chip { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .chip.on { background: linear-gradient(135deg, var(--accent), var(--accent-2, var(--accent))); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+    .timer { display: grid; place-items: center; padding: 18px 0 8px; }
+    .ring { position: relative; width: 300px; height: 300px; }
+    .ring svg { transform: rotate(-90deg); }
+    .ring .time { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+    .ring .time b { font: 700 64px/1 var(--mono); letter-spacing: -2px; }
+    .ring .time span { color: var(--muted); font-size: 14px; margin-top: 6px; display: block; }
+    .controls { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+    .controls button { padding: 10px 22px; border-radius: 12px; font-weight: 600; }
+    .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    li { display: flex; gap: 10px; align-items: center; }
+    li i { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--border); flex: none; }
+    li.done i { background: var(--accent); border-color: var(--accent); }
+    li.done { color: var(--muted); text-decoration: line-through; }
+    .bars { display: flex; align-items: end; gap: 8px; height: 92px; margin-top: 10px; }
+    .bars div { flex: 1; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+    .bars div.today { background: linear-gradient(180deg, var(--accent-2, var(--accent)), var(--accent)); }
+    .days { display: flex; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .days span { flex: 1; text-align: center; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>Fokus</h1>
+      <div class="chips"><span class="chip on">Fokus 25</span><span class="chip">Paus 5</span><span class="chip">Lång paus 15</span></div>
+    </header>
+    <section class="timer">
+      <div class="ring">
+        <svg width="300" height="300" viewBox="0 0 300 300">
+          <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2, var(--accent))"/></linearGradient></defs>
+          <circle cx="150" cy="150" r="132" fill="none" stroke="var(--border)" stroke-width="14"/>
+          <circle id="arc" cx="150" cy="150" r="132" fill="none" stroke="url(#g)" stroke-width="14" stroke-linecap="round"/>
+        </svg>
+        <div class="time"><div><b id="t">17:42</b><span>Pass 3 av 6 · Skriva rapport</span></div></div>
+      </div>
+    </section>
+    <div class="controls"><button id="go">Pausa</button><button class="secondary">Hoppa över</button></div>
+    <section class="grid">
+      <div class="card">
+        <h2>Dagens mål</h2>
+        <ul>
+          <li class="done"><i></i>Svara på mejl</li>
+          <li class="done"><i></i>Granska PR för Forge</li>
+          <li><i></i>Skriva rapport</li>
+          <li><i></i>Planera nästa vecka</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Fokustid · vecka</h2>
+        <div class="bars">
+          <div style="height:55%"></div><div style="height:80%"></div><div style="height:40%"></div>
+          <div style="height:95%"></div><div class="today" style="height:62%"></div><div style="height:6%"></div><div style="height:6%"></div>
+        </div>
+        <div class="days"><span>mån</span><span>tis</span><span>ons</span><span>tor</span><span>fre</span><span>lör</span><span>sön</span></div>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

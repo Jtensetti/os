@@ -236,6 +236,10 @@ cmd_list() {
 app_port() { printf '%s' "$(( 20000 + $(printf '%s' "$1" | cksum | cut -d' ' -f1) % 10000 ))"; }
 port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+have_webview() {
+  /usr/bin/python3 -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("WebKit", "6.0")' 2>/dev/null
+}
+
 find_browser() {
   local b
   for b in "${FORGE_BROWSER:-}" chromium chromium-browser google-chrome brave-browser microsoft-edge; do
@@ -280,7 +284,10 @@ cmd_run() {
       fi
       if [[ "${FORGE_NO_WINDOW:-0}" == 1 ]]; then printf '%s\n' "$url"; wait; return; fi
       local browser; browser="$(find_browser)"
-      if [[ -n "$browser" ]]; then
+      if [[ "${FORGE_WINDOW:-auto}" != browser ]] && have_webview; then
+        # Native GTK/WebKit window: app id forge.app.<slug>, storage in $data.
+        /usr/bin/python3 "$FORGE_SHARE/libexec/forge-webview" "$slug" "$url" "$data"
+      elif [[ -n "$browser" ]]; then
         "$browser" --app="$url" --user-data-dir="$data/browser" --class="forge-$slug" \
           --no-first-run --no-default-browser-check
       else
@@ -492,10 +499,21 @@ cmd_chat() {
 
 cmd_doctor() {
   local c ok=1
-  for c in git jq python3 claude codex ollama bwrap; do
+  for c in git jq python3; do
     if command -v "$c" >/dev/null; then printf '  ✓ %s\n' "$c"; else printf '  ✗ %s\n' "$c"; ok=0; fi
   done
-  printf '  browser: %s\n' "$(find_browser || true)"
+  # Agents: at least the configured one must exist; the rest are optional.
+  for c in claude codex ollama; do
+    if command -v "$c" >/dev/null; then printf '  ✓ %s\n' "$c"; else printf '  · %s (saknas)\n' "$c"; fi
+  done
+  local engine="$FORGE_AGENT"; [[ "$engine" == local ]] && engine="${FORGE_LOCAL_ENGINE:-codex}"
+  command -v "$engine" >/dev/null || { printf '  ✗ vald agent "%s" är inte installerad\n' "$engine"; ok=0; }
+  if command -v bwrap >/dev/null && bwrap --ro-bind / / --unshare-all true 2>/dev/null; then
+    printf '  ✓ sandlåda (bubblewrap)\n'
+  else
+    printf '  ✗ sandlåda (bubblewrap) — appar körs utan\n'
+  fi
+  if have_webview; then printf '  ✓ appfönster (GTK/WebKit)\n'; else printf '  ✗ appfönster (GTK/WebKit) — reserv: %s\n' "$(find_browser || echo ingen)"; fi
   printf '  agent:   %s\n' "$FORGE_AGENT"
   printf '  appar:   %s\n' "$FORGE_APPS"
   printf '  system:  %s\n' "$FORGE_SYSTEM"

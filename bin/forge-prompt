@@ -30,11 +30,12 @@ pick_app() {
 }
 
 focused_app() {
-  # Forge app windows are Chromium app windows for http://<slug>.localhost,
-  # so their Wayland class is "chrome-<slug>.localhost__…" ("forge-<slug>" on X11).
+  # Forge app windows have the Wayland class "forge.app.<slug>" (with _ for -),
+  # or "chrome-<slug>.localhost__…" when the browser fallback is used.
   command -v hyprctl >/dev/null || return 0
-  hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' \
-    | sed -n -e 's/^chrome-\([a-z0-9-]*\)\.localhost__.*/\1/p' -e 's/^forge-//p'
+  hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' | sed -n \
+    -e 's/^forge\.app\._\{0,1\}\([a-z0-9_]*\)$/\1/p' \
+    -e 's/^chrome-\([a-z0-9-]*\)\.localhost__.*/\1/p' | tr '_' '-'
 }
 
 term() {

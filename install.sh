@@ -59,7 +59,8 @@ if [[ "${FORGE_DEFER:-0}" == 1 ]]; then
   ln -sfn /etc/systemd/system/forge-firstboot.service /etc/systemd/system/multi-user.target.wants/forge-firstboot.service
 else
   say "Paket, tjänster och AI-agenter (kan ta en stund)"
-  FORGE_NO_START=1 "$dest/libexec/forge-apply" --root "$home/Forge/system"
+  FORGE_NO_START=1 "$dest/libexec/forge-apply" --root "$home/Forge/system" \
+    || say "Några steg misslyckades (se ovan). Kör 'forge system apply' igen senare."
   mkdir -p /var/lib/forge && touch /var/lib/forge/firstboot-done
   as_user "$dest/libexec/forge-apply" --user "$home/Forge/system" || true
 fi

@@ -6,6 +6,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck jq
-      - run: shellcheck -x bin/* libexec/forge-apply libexec/forge-sandbox libexec/forge-firstboot install.sh iso/build.sh tests/run.sh tests/fake-agent system/hooks/*/*.sh
-      - run: python3 -m py_compile libexec/forge-theme libexec/forge-serve
+      - run: shellcheck -x bin/* libexec/forge-apply libexec/forge-sandbox libexec/forge-firstboot install.sh iso/build.sh tests/*.sh tests/fake-agent tests/vm/run.sh tests/vm/demo-agent system/hooks/*/*.sh
+      - run: python3 -m py_compile libexec/forge-theme libexec/forge-serve libexec/forge-webview
       - run: tests/run.sh
+
+  # Real install on Ubuntu 26.04 LTS: every package, Hyprland config
+  # validation, agents, skills, and a forge new/run/theme cycle.
+  install-ubuntu-2604:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - run: apt-get update && apt-get install -y git sudo
+      - uses: actions/checkout@v4
+      - run: useradd -m -u 1000 -s /bin/bash -G sudo testare
+      - run: FORGE_USER=testare FORGE_WITH_OLLAMA=0 ./install.sh
+      - run: tests/install-check.sh testare

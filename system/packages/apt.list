@@ -25,13 +25,15 @@ wireplumber
 fonts-inter
 fonts-jetbrains-mono
 fonts-noto-color-emoji
-fonts-symbols-only-nerdfont   # ikoner i panelen
 papirus-icon-theme
 libnotify-bin
 
 # Lokal AI (Ollama installeras av hooks/root/25-ollama.sh)
 
 # Forge-kärnan
+apparmor           # tillåter bubblewrap-sandlådan (bwrap-userns-restrict)
+zstd               # krävs av Ollamas installerare
+xz-utils           # packar upp Node.js (hooks/root/18-nodejs.sh)
 git
 jq
 curl
@@ -40,7 +42,9 @@ python3
 nodejs
 npm
 flatpak
-chromium-browser   # används som app-fönster för webbappar
+python3-gi         # appfönster för webbappar (GTK 4 + WebKitGTK 6)
+gir1.2-gtk-4.0
+gir1.2-webkit-6.0
 
 # Säkerhetsnät
 btrfs-progs

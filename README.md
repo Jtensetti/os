@@ -83,7 +83,14 @@ forge theme [namn|next]         forge agent claude|codex|local [modell]
 forge chat                      forge doctor
 ```
 
-## Utveckla
+## Utveckla och testa
 
-`tests/run.sh` kör hela flödet med en låtsasagent (inget konto, ingen root behövs).
+Forge är en *remix* av Ubuntu, inte en fork: allt kommer från Ubuntus egna arkiv (Hyprland 0.53
+finns i universe i 26.04), och Forge lägger bara till sina program, konfig och skills ovanpå.
+Säkerhetsuppdateringar kommer därför direkt från Ubuntu.
+
+- `tests/run.sh` — hela forge-flödet med en låtsasagent (inget konto, ingen root).
+- `sudo tests/install-check.sh` — verifierar ett installerat system.
+- `sudo tests/vm/run.sh` — installerar på Ubuntu 26.04 och startar i en VM med Hyprland.
+- CI installerar på `ubuntu:26.04` vid varje push.
 Status: tidig MVP — se [roadmap](docs/ARCHITECTURE.md#roadmap).

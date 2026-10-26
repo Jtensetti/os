@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Stand-in agent for the VM test: installs the hand-written demo app "Fokus"
+# (tests/vm/demo-app) so screenshots have something to show without an account.
+set -euo pipefail
+cp -r "$(dirname "$(readlink -f "$0")")/demo-app/." "$1/"

@@ -1,0 +1,83 @@
+#!/usr/bin/python3
+"""forge-webview <slug> <url> <data-dir>: native window for a Forge web app.
+
+GTK 4 + WebKitGTK 6. Each app gets:
+  - its own Wayland app id "forge.app.<slug>" (Super+E uses it to find the app)
+  - its own persistent storage (localStorage, IndexedDB, cookies) in <data-dir>
+  - one window per app: launching it again focuses the open window
+Links to other sites open in the normal browser.
+"""
+import sys
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("WebKit", "6.0")
+from gi.repository import Gio, GLib, Gtk, WebKit  # noqa: E402
+
+
+def app_id_for(slug: str) -> str:
+    # D-Bus/GApplication ids: segments of [A-Za-z0-9_], not starting with a digit.
+    return "forge.app." + "_" * slug[0].isdigit() + slug.replace("-", "_")
+
+
+class ForgeWebApp(Gtk.Application):
+    def __init__(self, slug, url, data_dir):
+        super().__init__(application_id=app_id_for(slug), flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        self.slug, self.url, self.data_dir = slug, url, data_dir
+        self.origin = GLib.Uri.parse(url, GLib.UriFlags.NONE)
+        self.window = None
+
+    def do_activate(self):
+        if self.window:
+            self.window.present()
+            return
+        session = WebKit.NetworkSession.new(f"{self.data_dir}/webkit-data", f"{self.data_dir}/webkit-cache")
+        view = WebKit.WebView(network_session=session)
+        settings = view.get_settings()
+        settings.set_enable_developer_extras(True)
+        settings.set_javascript_can_access_clipboard(True)
+        view.connect("decide-policy", self.on_policy)
+        view.connect("permission-request", self.on_permission)
+        view.connect("notify::title", lambda v, _p: self.window.set_title(v.get_title() or self.slug))
+        view.load_uri(self.url)
+
+        self.window = Gtk.ApplicationWindow(application=self, title=self.slug)
+        self.window.set_default_size(1100, 760)
+        self.window.set_child(view)
+        self.window.present()
+
+    def same_app(self, uri: str) -> bool:
+        try:
+            u = GLib.Uri.parse(uri, GLib.UriFlags.NONE)
+        except GLib.Error:
+            return False
+        return (u.get_host(), u.get_port()) == (self.origin.get_host(), self.origin.get_port())
+
+    def on_policy(self, _view, decision, kind):
+        if kind in (WebKit.PolicyDecisionType.NAVIGATION_ACTION, WebKit.PolicyDecisionType.NEW_WINDOW_ACTION):
+            uri = decision.get_navigation_action().get_request().get_uri()
+            if not self.same_app(uri) and not uri.startswith(("about:", "data:", "blob:")):
+                Gio.AppInfo.launch_default_for_uri(uri, None)
+                decision.ignore()
+                return True
+        return False
+
+    def on_permission(self, _view, request):
+        # Notifications and clipboard are fine; camera, mic and location are not (yet).
+        if isinstance(request, (WebKit.NotificationPermissionRequest, WebKit.ClipboardPermissionRequest)):
+            request.allow()
+        else:
+            request.deny()
+        return True
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("usage: forge-webview <slug> <url> <data-dir>", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(ForgeWebApp(*sys.argv[1:4]).run([sys.argv[0]]))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+{
+  "name": "Fokus",
+  "description": "Pomodoro-timer med dagens mål och statistik",
+  "kind": "web",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "permissions": { "network": true, "files": [] }
+}

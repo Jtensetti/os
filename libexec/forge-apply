@@ -38,7 +38,10 @@ sync_tree() {
     local f
     while IFS= read -r f; do
       mkdir -p "$dest/$(dirname "$f")"
-      cp -a --remove-destination "$src/$f" "$dest/$f"
+      # Keep mode and timestamps, but never the repo owner: files under /
+      # must belong to root even though the user owns ~/Forge/system.
+      cp -P --preserve=mode,timestamps --remove-destination "$src/$f" "$dest/$f"
+      if [[ $EUID -eq 0 && "$dest" != "$HOME" ]]; then chown -h root:root "$dest/$f"; fi
     done <"$new"
   fi
   if [[ -f "$state" ]]; then
@@ -57,13 +60,18 @@ sync_tree() {
 # removed <state-file> <current-list>: print entries that disappeared.
 removed() { [[ -f "$1" ]] && comm -23 <(sort -u "$1") <(printf '%s\n' "$2" | sed '/^$/d' | sort -u) || true; }
 
+# One broken hook must not stop the rest; failures are reported at the end.
+FAILED_HOOKS=()
 run_hooks() {
   local dir="$1" h
   [[ -d "$dir" ]] || return 0
   for h in "$dir"/*.sh; do
     [[ -f "$h" ]] || continue
     log "hook $(basename "$h")"
-    FORGE_SYSTEM="$repo" FORGE_ROOT="$ROOT" bash "$h"
+    if ! FORGE_SYSTEM="$repo" FORGE_ROOT="$ROOT" bash "$h"; then
+      log "hook $(basename "$h") misslyckades"
+      FAILED_HOOKS+=("$(basename "$h")")
+    fi
   done
 }
 
@@ -129,12 +137,15 @@ apply_root() {
   if [[ -z "${FORGE_SKIP_SERVICES:-}" ]] && command -v systemctl >/dev/null && [[ -z "$ROOT" ]]; then
     local units u
     units="$(read_list "$repo/services/system.list")"
-    systemctl daemon-reload
+    # Outside a booted system (chroot, container, installer) systemctl can
+    # still enable units offline, but cannot reload or start anything.
+    local booted=0; [[ -d /run/systemd/system ]] && booted=1
+    if ((booted)); then systemctl daemon-reload; fi
     # FORGE_NO_START=1 (install on a running desktop): enable for next boot only,
     # so e.g. greetd does not take over the screen mid-install.
-    local now=(--now); [[ "${FORGE_NO_START:-0}" == 1 ]] && now=()
+    local now=(--now); [[ "${FORGE_NO_START:-0}" == 1 || $booted == 0 ]] && now=()
     for u in $units; do systemctl enable "${now[@]}" "$u" || log "kunde inte aktivera $u"; done
-    for u in $(removed "$state/system.units" "$units"); do systemctl disable --now "$u" || true; done
+    for u in $(removed "$state/system.units" "$units"); do systemctl disable "${now[@]}" "$u" || true; done
     printf '%s\n' "$units" >"$state/system.units"
   fi
   run_hooks "$repo/hooks/root"
@@ -145,3 +156,7 @@ case "$mode" in
   --root) apply_root ;;
   *) echo "usage: forge-apply --user|--root <system-repo>" >&2; exit 2 ;;
 esac
+if ((${#FAILED_HOOKS[@]})); then
+  echo "forge-apply: misslyckade hooks: ${FAILED_HOOKS[*]}" >&2
+  exit 1
+fi

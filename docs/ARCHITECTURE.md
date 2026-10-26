@@ -21,8 +21,11 @@
   - **web**: en lokal server på en *fast* port per app (räknas fram från namnet), så att
     `localStorage` m.m. finns kvar mellan körningar. Statiska appar serveras av
     `libexec/forge-serve`; appar med `server` startar sitt eget kommando med `$PORT`.
-    Fönstret är Chromium i `--app`-läge med en egen profil per app på adressen `http://<app>.localhost:<port>`
-    (så Super+E vet vilken app som har fokus).
+    Fönstret är `libexec/forge-webview` (GTK 4 + WebKitGTK 6, Ubuntu-paket): ett riktigt
+    appfönster med Wayland-id `forge.app.<app>` (så Super+E vet vilken app som har fokus), egen
+    lagring per app och länkar till andra sajter i vanliga webbläsaren. Saknas WebKitGTK används
+    Chromium i `--app`-läge som reserv. (Ubuntus Chromium är en snap och får inte skriva i dolda
+    kataloger som `~/.local`, därför inte förstahandsval.)
   - **cli/native**: körs direkt i sandlådan.
 - Sandlåda (`libexec/forge-sandbox`, bubblewrap): systemet skrivskyddat, tomt `$HOME`,
   bara appkatalogen och `$FORGE_DATA_DIR` skrivbara, extra mappar enligt manifestet.
@@ -64,6 +67,15 @@ Codex: `--full-auto` = skrivrätt bara i arbetskatalogen).
 - ISO (`iso/build.sh`): Ubuntu Server LTS + autoinstall. Installationen kör `install.sh` med
   `FORGE_DEFER=1`; paket och agenter installeras av `forge-firstboot.service` vid första uppstart.
 
+## Test
+- `tests/run.sh` — snabba tester av hela forge-flödet med låtsasagent (sekunder).
+- `tests/install-check.sh` — kör på ett installerat system: alla paket, Hyprlands egen
+  konfigvalidering, fuzzel/Waybar/Alacritty-konfig, tjänster, agenter, skills, REA och en
+  forge new → run → theme-runda som användaren.
+- `tests/vm/run.sh` — helsystemtest: Ubuntu 26.04 + install.sh i en chroot, sedan en riktig
+  uppstart i QEMU (systemd, greetd, Hyprland med programvarurendering) med skärmdumpar.
+- CI kör `tests/run.sh` och en full installation i containern `ubuntu:26.04` vid varje push.
+
 ## Säkerhetsmodell (kort)
 - Agenten kan skriva i app- eller systemrepot, men inte verkställa systemändringar själv.
 - Allt agenten gör är en git-commit → går att granska och ångra.
@@ -72,7 +84,7 @@ Codex: `--full-auto` = skrivrätt bara i arbetskatalogen).
   appen är det som kräver uttrycklig behörighet.
 
 ## Roadmap
-1. Testa install.sh och ISO:n i en VM på Ubuntu 26.04, rätta paketnamn. Skärmdump från riktig Hyprland.
+1. Testa ISO-installationen (autoinstall) i en VM från början till slut.
 2. `network: false` även för webbappars JavaScript (CSP-header från Forge-servern).
 3. "Forge Store": bläddra bland delade appar (git-baserat index), med granskningsrapport.
 4. Systemändringar som förslag-grenar: prova en ändring, behåll eller kasta.
