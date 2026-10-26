@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y shellcheck jq
-      - run: shellcheck -x bin/* libexec/forge-apply libexec/forge-sandbox libexec/forge-firstboot install.sh iso/build.sh tests/*.sh tests/fake-agent tests/vm/run.sh tests/vm/demo-agent system/hooks/*/*.sh
+      - run: shellcheck -x bin/* libexec/forge-apply libexec/forge-sandbox libexec/forge-firstboot libexec/forge-sync-defaults install.sh iso/build.sh tests/*.sh tests/fake-agent tests/vm/run.sh tests/vm/demo-agent system/hooks/*/*.sh
       - run: python3 -m py_compile libexec/forge-theme libexec/forge-serve libexec/forge-webview
       - run: tests/run.sh
 

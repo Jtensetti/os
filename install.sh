@@ -38,16 +38,12 @@ for b in forge forge-prompt; do ln -sfn "$dest/bin/$b" "/usr/local/bin/$b"; done
 
 as_user() { sudo -u "$user" -H env FORGE_SHARE="$dest" FORGE_WITH_REA="${FORGE_WITH_REA:-1}" "$@"; }
 
-say "Skapar ~/Forge/system och ~/Apps för $user"
-if [[ ! -d "$home/Forge/system/.git" ]]; then
-  as_user mkdir -p "$home/Forge" "$home/Apps"
-  as_user cp -r "$dest/system" "$home/Forge/system"
-  as_user git -C "$home/Forge/system" init -q
-  as_user git -C "$home/Forge/system" add -A
-  as_user git -C "$home/Forge/system" -c user.name=Forge -c user.email=forge@localhost commit -q -m "Forge OS standardsystem"
-else
-  say "$home/Forge/system finns redan — rör den inte"
-fi
+say "$home/Forge/system och $home/Apps"
+as_user mkdir -p "$home/Forge" "$home/Apps"
+# First install creates the repo; later runs merge new defaults into it
+# while keeping the user's own changes (see libexec/forge-sync-defaults).
+as_user "$dest/libexec/forge-sync-defaults" "$dest/system" "$home/Forge/system" \
+  || say "Dina ändringar krockar med nya standardinställningar — kör 'forge update --agent' efteråt."
 
 say "Dotfiles, skills och agentinstruktioner"
 as_user "$dest/libexec/forge-apply" --user "$home/Forge/system" || say "En del av användarsteget misslyckades (körs igen vid inloggning)"

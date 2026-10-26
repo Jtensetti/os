@@ -60,8 +60,9 @@ sleep 0.3
 
 echo "Systemet"
 sys="$HOME/Forge/system"
-mkdir -p "$HOME/Forge" && cp -r "$repo/system" "$sys"
-git -C "$sys" init -q && git -C "$sys" add -A && git -C "$sys" -c user.name=t -c user.email=t@t commit -qm init
+mkdir -p "$HOME/Forge"
+"$repo/libexec/forge-sync-defaults" "$repo/system" "$sys" 2>/dev/null
+git -C "$sys" rev-parse -q --verify upstream >/dev/null && ok "systemrepo med upstream-gren" || fail "sync init"
 export FORGE_ROOT="$t/root" FORGE_SKIP_PACKAGES=1 FORGE_SHARE="$repo"
 mkdir -p "$FORGE_ROOT"
 forge system "installera htop" >/dev/null 2>&1 || true
@@ -91,6 +92,25 @@ FORGE_SKIP_ROOT=1 forge system rollback >/dev/null 2>&1
 "$repo/libexec/forge-apply" --root "$sys" 2>/dev/null
 [[ ! -f "$HOME/.config/forge-test/greeting" && ! -f "$FORGE_ROOT/etc/forge-test/file" ]] && ok "rollback tar bort filerna igen" || fail "rollback"
 ! grep -q '^htop$' "$sys/packages/apt.list" && ok "rollback återställer paketlistan" || fail "rollback list"
+
+echo "Uppdateringar av Forge"
+defaults="$t/defaults"; cp -r "$repo/system" "$defaults"
+echo "neovim" >>"$defaults/packages/apt.list"                       # Forge ändrar en fil
+echo "# mitt eget" >>"$sys/home/.config/hypr/hyprland.conf"         # användaren en annan
+git -C "$sys" -c user.name=t -c user.email=t@t commit -qam "mitt"
+"$repo/libexec/forge-sync-defaults" "$defaults" "$sys" 2>/dev/null
+grep -q '^neovim$' "$sys/packages/apt.list" && grep -q '# mitt eget' "$sys/home/.config/hypr/hyprland.conf" \
+  && ok "nya standardinställningar + egna ändringar slås ihop" || fail "merge"
+"$repo/libexec/forge-sync-defaults" "$defaults" "$sys" 2>/dev/null && ok "ingen ändring andra gången" || fail "idempotent"
+sed -i 's/^gaps_in = .*/  gaps_in = 2/; s/  gaps_in = 6/  gaps_in = 2/' "$sys/home/.config/hypr/hyprland.conf"
+git -C "$sys" -c user.name=t -c user.email=t@t commit -qam "tätare"
+sed -i 's/  gaps_in = 6/  gaps_in = 12/' "$defaults/home/.config/hypr/hyprland.conf"
+before="$(git -C "$sys" rev-parse HEAD)"
+rc=0; "$repo/libexec/forge-sync-defaults" "$defaults" "$sys" 2>/dev/null || rc=$?
+[[ $rc == 3 && "$(git -C "$sys" rev-parse HEAD)" == "$before" && -z "$(git -C "$sys" status --porcelain)" ]] \
+  && ok "krock: inget ändras, användarens version behålls" || fail "conflict rc=$rc"
+grep -q 'gaps_in = 2' "$sys/home/.config/hypr/hyprland.conf" && ok "användarens värde kvar" || fail "user value"
+FORGE_SKIP_ROOT=1 forge update >/dev/null 2>&1 && ok "forge update (Forges egen standard)" || fail "forge update"
 
 echo "Lokal AI"
 unset FORGE_AGENT_CMD

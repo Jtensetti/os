@@ -80,6 +80,7 @@ forge edit <app> "ändring"      forge system diff | log | apply | rollback
 forge run | list | history | undo | rm <app>
 forge share <app> / forge install fil.forgeapp / forge sync
 forge theme [namn|next]         forge agent claude|codex|local [modell]
+forge update [--agent]          Forges nya standard, dina ändringar behålls
 forge chat                      forge doctor
 ```
 

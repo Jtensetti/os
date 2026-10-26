@@ -492,6 +492,24 @@ cmd_theme() {
   info "Tema: $name"
 }
 
+cmd_update() {
+  # Merge this Forge release's default system into ~/Forge/system, then apply.
+  local rc=0
+  "$FORGE_SHARE/libexec/forge-sync-defaults" "$FORGE_SHARE/system" "$FORGE_SYSTEM" || rc=$?
+  if [[ $rc == 3 && "${1:-}" == --agent ]]; then
+    git -C "$FORGE_SYSTEM" -c user.name=Forge -c user.email=forge@localhost merge --no-edit upstream >/dev/null 2>&1 || true
+    run_agent "$FORGE_SYSTEM" "Det finns en git-merge-konflikt i det här repot mellan användarens ändringar (HEAD) och Forges nya standardinställningar (upstream). Följ skillen forge-system-edit. Lös konflikterna så att användarens avsikt behålls och de nya standardinställningarna kommer med där det går. Kör inte git commit och inte sudo. Avsluta med en kort sammanfattning på svenska."
+    if [[ -n "$(git -C "$FORGE_SYSTEM" diff --name-only --diff-filter=U)" ]] || grep -rqs '^<<<<<<< ' "$FORGE_SYSTEM" --exclude-dir=.git; then
+      git -C "$FORGE_SYSTEM" merge --abort; die "konflikterna är inte lösta — inget ändrades"
+    fi
+    git -C "$FORGE_SYSTEM" add -A
+    git -C "$FORGE_SYSTEM" -c user.name=Forge -c user.email=forge@localhost commit -q --no-edit
+    rc=0
+  fi
+  [[ $rc == 0 ]] || return "$rc"
+  system_apply "${@:2}"
+}
+
 cmd_chat() {
   # Open-ended agent session (Super+/), in the home directory by default.
   run_agent "${1:-$HOME}" ""
@@ -538,6 +556,7 @@ Systemet
   forge system "ändring"               låt agenten ändra själva OS:et
   forge system diff|log|apply [--user]|rollback
   forge theme [namn|next]              visa/byt tema (hela systemet + alla appar)
+  forge update [--agent]               hämta Forges nya standard, behåll dina ändringar
 
 Övrigt
   forge agent [claude|codex]           visa/byt AI-agent (moln)
@@ -565,6 +584,7 @@ main() {
     agent) cmd_agent "$@" ;;
     chat) cmd_chat "$@" ;;
     theme) cmd_theme "$@" ;;
+    update) cmd_update "$@" ;;
     doctor) cmd_doctor ;;
     version|--version) printf 'forge %s\n' "$FORGE_VERSION" ;;
     help|-h|--help) usage ;;

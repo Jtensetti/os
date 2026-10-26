@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# forge-sync-defaults <defaults-dir> <system-repo>
+#
+# Bring a new Forge release's default system into the user's system repo
+# without losing their own changes. The repo has two branches:
+#   upstream  exactly the distro defaults, one commit per release
+#   main      upstream + everything the user (or their agent) changed
+# New defaults are committed to upstream, then merged into main. On a
+# conflict the merge is aborted and main is left untouched.
+#
+# Exit codes: 0 merged or nothing new, 3 conflict (main unchanged).
+set -euo pipefail
+
+defaults="$(cd "$1" && pwd)" repo="$2"
+g() { git -C "$repo" -c user.name=Forge -c user.email=forge@localhost "$@"; }
+
+if [[ ! -d "$repo/.git" ]]; then
+  mkdir -p "$repo"
+  cp -r "$defaults/." "$repo/"
+  g init -q -b main
+  g add -A
+  g commit -q -m "Forge OS standardsystem"
+  g branch upstream
+  exit 0
+fi
+
+# Installs from before the upstream branch existed: their first commit is
+# the pristine default system.
+if ! g rev-parse -q --verify upstream >/dev/null; then
+  g branch upstream "$(g rev-list --max-parents=0 HEAD | tail -1)"
+fi
+
+# Uncommitted edits would block the merge; keep them as a commit.
+if [[ -n "$(g status --porcelain)" ]]; then
+  g add -A && g commit -q -m "forge: osparade ändringar"
+fi
+
+tree="$(mktemp -d)"
+trap 'g worktree remove --force "$tree" >/dev/null 2>&1 || rm -rf "$tree"' EXIT
+g worktree add -q --force "$tree" upstream
+find "$tree" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -r "$defaults/." "$tree/"
+git -C "$tree" add -A
+if git -C "$tree" diff --cached --quiet; then
+  echo "Inga nya standardinställningar." >&2
+else
+  git -C "$tree" -c user.name=Forge -c user.email=forge@localhost commit -q -m "Forge OS: nya standardinställningar"
+  echo "Nya standardinställningar från Forge." >&2
+fi
+
+branch="$(g symbolic-ref --short HEAD)"
+if g merge-base --is-ancestor upstream "$branch"; then
+  exit 0
+fi
+if g merge -q --no-edit -m "forge update: slå ihop nya standardinställningar" upstream >/dev/null 2>&1; then
+  echo "Sammanslaget med dina egna ändringar." >&2
+  exit 0
+fi
+conflicts="$(g diff --name-only --diff-filter=U | tr '\n' ' ')"
+g merge --abort
+echo "Krock mellan dina ändringar och Forges nya standard i: $conflicts" >&2
+echo "Inget ändrades. Kör 'forge update --agent' så löser agenten det." >&2
+exit 3

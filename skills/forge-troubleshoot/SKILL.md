@@ -7,6 +7,8 @@ description: Diagnose and fix problems on Forge OS (app won't start, broken conf
 Börja alltid med att ta reda på vad som ändrats senast:
 - Appar: `forge history <app>` — ångra med `forge undo <app>`.
 - Systemet: `forge system log` / `forge system diff` — ångra med `forge system rollback`.
+- Efter en Forge-uppdatering: `git -C ~/Forge/system log upstream` visar vad Forge ändrade;
+  krockar löses med `forge update --agent`.
 - Snapshots (btrfs): `snapper list` (be användaren köra `sudo snapper rollback` om det behövs).
 
 Sedan:

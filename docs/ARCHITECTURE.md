@@ -33,6 +33,13 @@
 - Data: `~/.local/share/forge/appdata/<app>/` — separerat från koden, så `undo` och
   uppdateringar aldrig rör data.
 
+## Uppdateringar
+`~/Forge/system` har två grenar: `upstream` (exakt Forges standard, en commit per version) och
+`main` (upstream + användarens och agentens ändringar). `forge update` (och `install.sh` när det
+körs igen) committar nya standardinställningar på `upstream` och slår ihop dem i `main` med git.
+Krockar det avbryts sammanslagningen och inget ändras; `forge update --agent` låter agenten lösa
+konflikten och användaren ser resultatet. Paketuppdateringar kommer som vanligt från Ubuntu (apt).
+
 ## Teman
 `~/Forge/system/theme/`: `active`, `themes/<namn>.theme` (palett), `templates/**.tmpl`.
 `libexec/forge-theme render` byter ut `{{nyckel}}` och skriver filerna till `~` (Hyprland-färger,
