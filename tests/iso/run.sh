@@ -22,13 +22,17 @@ shots() {  # shots <prefix> <count> <every-seconds> <pid>
   done
 }
 
-say "Bygger test-ISO"
-AUTOINSTALL_DIR="$repo/tests/iso" "$repo/iso/build.sh" "$work/ubuntu.iso" "$work/forge-test.iso"
+if [[ "${SKIP_BUILD:-0}" == 1 && -f "$work/forge-test.iso" ]]; then
+  say "Använder befintlig test-ISO"
+else
+  say "Bygger test-ISO"
+  AUTOINSTALL_DIR="$repo/tests/iso" "$repo/iso/build.sh" "$work/ubuntu.iso" "$work/forge-test.iso"
+fi
 
 say "Installerar på tom disk (autoinstall)"
 rm -f "$work/disk.qcow2" "$work"/*.ppm "$work/mon.sock"
 qemu-img create -q -f qcow2 "$work/disk.qcow2" 30G
-qemu-system-x86_64 -accel "$accel" -smp "${VM_CPUS:-4}" -m "${VM_MEM:-6G}" \
+qemu-system-x86_64 -accel "$accel" -smp "${VM_CPUS:-4}" -m "${VM_MEM:-3G}" \
   -cdrom "$work/forge-test.iso" -boot d -drive "file=$work/disk.qcow2,if=virtio" \
   -device virtio-vga -display none -nic user,model=virtio-net-pci \
   -serial "file:$work/install-serial.log" -monitor "unix:$work/mon.sock,server,nowait" &
@@ -39,7 +43,7 @@ say "Installationen klar (maskinen stängde av sig)"
 
 say "Startar det installerade systemet"
 rm -f "$work/mon.sock"
-qemu-system-x86_64 -accel "$accel" -smp "${VM_CPUS:-4}" -m "${VM_MEM:-6G}" \
+qemu-system-x86_64 -accel "$accel" -smp "${VM_CPUS:-4}" -m "${VM_MEM:-3G}" \
   -drive "file=$work/disk.qcow2,if=virtio" \
   -device virtio-vga -display none -nic user,model=virtio-net-pci \
   -serial "file:$work/boot-serial.log" -monitor "unix:$work/mon.sock,server,nowait" &

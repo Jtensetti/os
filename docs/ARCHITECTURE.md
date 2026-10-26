@@ -81,6 +81,8 @@ Codex: `--full-auto` = skrivrätt bara i arbetskatalogen).
   forge new → run → theme-runda som användaren.
 - `tests/vm/run.sh` — helsystemtest: Ubuntu 26.04 + install.sh i en chroot, sedan en riktig
   uppstart i QEMU (systemd, greetd, Hyprland med programvarurendering) med skärmdumpar.
+- `tests/iso/run.sh` — bygger installations-ISO:n (obevakad testvariant), installerar på en tom
+  disk i QEMU och startar det installerade systemet.
 - CI kör `tests/run.sh` och en full installation i containern `ubuntu:26.04` vid varje push.
 
 ## Säkerhetsmodell (kort)
@@ -91,7 +93,6 @@ Codex: `--full-auto` = skrivrätt bara i arbetskatalogen).
   appen är det som kräver uttrycklig behörighet.
 
 ## Roadmap
-1. Testa ISO-installationen (autoinstall) i en VM från början till slut.
 2. `network: false` även för webbappars JavaScript (CSP-header från Forge-servern).
 3. "Forge Store": bläddra bland delade appar (git-baserat index), med granskningsrapport.
 4. Systemändringar som förslag-grenar: prova en ändring, behåll eller kasta.

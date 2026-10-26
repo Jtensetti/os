@@ -93,5 +93,6 @@ Säkerhetsuppdateringar kommer därför direkt från Ubuntu.
 - `tests/run.sh` — hela forge-flödet med en låtsasagent (inget konto, ingen root).
 - `sudo tests/install-check.sh` — verifierar ett installerat system.
 - `sudo tests/vm/run.sh` — installerar på Ubuntu 26.04 och startar i en VM med Hyprland.
+- `sudo tests/iso/run.sh` — bygger ISO:n, installerar den på en tom disk och startar den.
 - CI installerar på `ubuntu:26.04` vid varje push.
 Status: tidig MVP — se [roadmap](docs/ARCHITECTURE.md#roadmap).
