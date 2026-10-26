@@ -1,0 +1,22 @@
+#cloud-config
+# Non-interactive variant of iso/autoinstall/user-data for automated tests:
+# same install, but with a fixed test user (testare / forge) and no questions.
+autoinstall:
+  version: 1
+  locale: sv_SE.UTF-8
+  keyboard:
+    layout: se
+  identity:
+    hostname: forge-iso
+    username: testare
+    password: "$6$s6miM8w6KkejqRyT$uf7xtOF/hFbShelPQ0xJgJHcNIzX8Iz1Y.P04SO8IdTiyxODBCt1aH9FYUnxJyu9cKq38ZKTYkXewxZkqhYHM."
+  storage:
+    layout:
+      name: direct
+  packages:
+    - git
+    - jq
+  late-commands:
+    - cp -a /cdrom/forge /target/opt/forge-src
+    - curtin in-target --target=/target -- env FORGE_DEFER=1 bash /opt/forge-src/install.sh
+  shutdown: poweroff

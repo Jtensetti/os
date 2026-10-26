@@ -9,7 +9,9 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
-UBUNTU_ISO_URL="${UBUNTU_ISO_URL:-https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso}"
+UBUNTU_ISO_URL="${UBUNTU_ISO_URL:-https://releases.ubuntu.com/26.04/ubuntu-26.04.1-live-server-amd64.iso}"
+# AUTOINSTALL_DIR=tests/iso builds the unattended test variant.
+autoinstall="${AUTOINSTALL_DIR:-$here/autoinstall}"
 in="${1:-$here/ubuntu.iso}"
 out="${2:-$here/forge-os.iso}"
 
@@ -26,10 +28,11 @@ git -C "$repo" archive HEAD | tar -x -C "$work/forge"
 xorriso -osirrox on -indev "$in" -extract /boot/grub/grub.cfg "$work/grub.cfg" >/dev/null 2>&1
 chmod u+w "$work/grub.cfg"
 # Boot straight into autoinstall with our config, and call it Forge OS.
-sed -i 's|---| autoinstall ds=nocloud\;s=/cdrom/nocloud/ ---|; s|Try or Install Ubuntu Server|Installera Forge OS|' "$work/grub.cfg"
+# grub needs the ; escaped: ds=nocloud\;s=... (sed needs the backslash doubled).
+sed -i 's|---| autoinstall ds=nocloud\\;s=/cdrom/nocloud/ ---|; s|Try or Install Ubuntu Server|Installera Forge OS|' "$work/grub.cfg"
 
 xorriso -indev "$in" -outdev "$out" \
-  -map "$here/autoinstall" /nocloud \
+  -map "$autoinstall" /nocloud \
   -map "$work/forge" /forge \
   -map "$work/grub.cfg" /boot/grub/grub.cfg \
   -boot_image any replay
