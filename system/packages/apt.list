@@ -8,6 +8,7 @@ hyprland
 swaybg
 hypridle
 hyprlock
+swaylock           # låsskärm utan 3D-grafik (forge-lock väljer)
 xdg-desktop-portal-hyprland
 waybar
 fuzzel

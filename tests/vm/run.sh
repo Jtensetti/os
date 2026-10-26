@@ -81,6 +81,8 @@ cat >> home/.config/hypr/hyprland.conf <<'CONF'
 exec-once = sleep 8 && alacritty -e bash -c 'forge list; echo; forge theme; echo; forge agent; exec bash'
 exec-once = sleep 12 && forge run fokus
 CONF
+# Lock after 4 idle minutes so the screenshots also cover the lock screen.
+sed -i 's/timeout = 600/timeout = 240/' home/.config/hypr/hypridle.conf
 git -c user.name=t -c user.email=t@t commit -qam "VM-test"
 EOF
   mkdir -p "$root/home/$user/Apps"

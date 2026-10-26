@@ -34,7 +34,7 @@ fi
 rm -rf "$dest.new"
 cp -a "$src" "$dest.new"
 rm -rf "$dest" && mv "$dest.new" "$dest"
-for b in forge forge-prompt; do ln -sfn "$dest/bin/$b" "/usr/local/bin/$b"; done
+for b in forge forge-prompt forge-lock; do ln -sfn "$dest/bin/$b" "/usr/local/bin/$b"; done
 
 as_user() { sudo -u "$user" -H env FORGE_SHARE="$dest" FORGE_WITH_REA="${FORGE_WITH_REA:-1}" "$@"; }
 

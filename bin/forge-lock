@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# forge-lock: lock the screen with hyprlock, or with swaylock when Hyprland
+# runs on software rendering (VMs without 3D), where hyprlock cannot draw and
+# would leave a black, unlockable-looking screen.
+set -euo pipefail
+pidof hyprlock swaylock >/dev/null && exit 0
+log="${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-none}/hyprland.log"
+if [[ -f "$log" ]] && grep -qm1 'Renderer: llvmpipe' "$log" && command -v swaylock >/dev/null; then
+  exec swaylock -f
+fi
+exec hyprlock -c "$HOME/.config/hypr/hyprlock.conf"
