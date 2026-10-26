@@ -10,7 +10,10 @@ set -euo pipefail
 ask() {
   local prompt="$1"
   if command -v fuzzel >/dev/null; then
-    fuzzel --dmenu --lines 0 --width 60 --prompt "$prompt " </dev/null
+    # Newer fuzzel has --prompt-only; older ones need one (empty) line to show at all.
+    local mode=(--lines 1)
+    fuzzel --help 2>&1 | grep -q -- '--prompt-only' && mode=(--prompt-only "$prompt ")
+    fuzzel --dmenu "${mode[@]}" --width 60 --prompt "$prompt " </dev/null
   elif command -v wofi >/dev/null; then
     wofi --dmenu --prompt "$prompt" </dev/null
   elif command -v zenity >/dev/null; then
@@ -27,9 +30,11 @@ pick_app() {
 }
 
 focused_app() {
-  # Forge app windows have class "forge-<slug>".
+  # Forge app windows are Chromium app windows for http://<slug>.localhost,
+  # so their Wayland class is "chrome-<slug>.localhost__…" ("forge-<slug>" on X11).
   command -v hyprctl >/dev/null || return 0
-  hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' | sed -n 's/^forge-//p'
+  hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' \
+    | sed -n -e 's/^chrome-\([a-z0-9-]*\)\.localhost__.*/\1/p' -e 's/^forge-//p'
 }
 
 term() {
@@ -67,8 +72,6 @@ case "${1:-new}" in
     ;;
   agent)
     # Open-ended session in the home dir, with all Forge skills loaded.
-    # shellcheck source=/dev/null
-    [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/forge/config" ]] && source "${XDG_CONFIG_HOME:-$HOME/.config}/forge/config"
-    term "cd ~ && ${FORGE_AGENT:-claude}"
+    term "forge chat"
     ;;
 esac

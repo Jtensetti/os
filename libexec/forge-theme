@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""forge-theme: render the active Forge theme into the user's config files.
+
+  forge-theme list   <system-repo>       list themes, '*' marks the active one
+  forge-theme render <system-repo>       render theme/templates/** into $HOME
+
+A theme is theme/themes/<name>.theme (KEY=VALUE, colors as rrggbb). Every
+template theme/templates/<path>.tmpl is written to ~/<path> with {{key}}
+replaced by the theme's values, so one switch restyles the whole desktop.
+"""
+import os
+import re
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+SHARE = Path(os.environ.get("FORGE_SHARE", "/usr/share/forge"))
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "forge" / "theme.files"
+
+
+def fail(msg):
+    print(f"forge-theme: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_theme(repo: Path, name: str) -> dict:
+    path = repo / "theme" / "themes" / f"{name}.theme"
+    if not path.is_file():
+        fail(f"temat '{name}' finns inte ({path})")
+    values = {"name": name}
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if "=" in line:
+            key, val = line.split("=", 1)
+            values[key.strip()] = val.strip()
+    for key in ("bg", "fg", "accent"):
+        if key not in values:
+            fail(f"temat '{name}' saknar '{key}'")
+    # Sensible fallbacks so small hand-made themes still render everything.
+    defaults = {"mode": "dark", "bg_alt": values["bg"], "surface": values["bg"], "muted": values["fg"],
+                "accent2": values["accent"], "border": values["accent"]}
+    for key in ("red", "green", "yellow", "blue", "magenta", "cyan"):
+        defaults[key] = values["accent"]
+    for key, val in defaults.items():
+        values.setdefault(key, val)
+    values["wallpaper"] = find_wallpaper(repo, values.get("wallpaper", f"{name}.jpg"))
+    return values
+
+
+def find_wallpaper(repo: Path, ref: str) -> str:
+    ref = os.path.expanduser(ref)
+    if os.path.isabs(ref):
+        return ref
+    for base in (repo / "theme" / "wallpapers", SHARE / "wallpapers"):
+        if (base / ref).is_file():
+            return str(base / ref)
+    return str(SHARE / "wallpapers" / "forge.jpg")
+
+
+def active_name(repo: Path) -> str:
+    path = repo / "theme" / "active"
+    return path.read_text().strip() if path.is_file() else "forge"
+
+
+def render(repo: Path):
+    values = load_theme(repo, active_name(repo))
+    templates = repo / "theme" / "templates"
+    written = []
+    for tmpl in sorted(templates.rglob("*.tmpl")):
+        rel = tmpl.relative_to(templates).with_suffix("")
+        text = tmpl.read_text()
+        missing = sorted({k for k in re.findall(r"{{\s*(\w+)\s*}}", text) if k not in values})
+        if missing:
+            fail(f"{tmpl}: okända nycklar {', '.join(missing)}")
+        out = re.sub(r"{{\s*(\w+)\s*}}", lambda m: values[m.group(1)], text)
+        dest = HOME / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(dest.name + ".forge-tmp")
+        tmp.write_text(out)
+        tmp.replace(dest)
+        written.append(str(rel))
+    # Remove files rendered earlier from templates that no longer exist.
+    if STATE.is_file():
+        for old in STATE.read_text().splitlines():
+            if old and old not in written:
+                (HOME / old).unlink(missing_ok=True)
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text("\n".join(written) + "\n")
+    print(f"  · tema: {values['name']} ({len(written)} filer)", file=sys.stderr)
+
+
+def list_themes(repo: Path):
+    active = active_name(repo)
+    for path in sorted((repo / "theme" / "themes").glob("*.theme")):
+        mark = "*" if path.stem == active else " "
+        print(f"{mark} {path.stem}")
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] not in ("list", "render"):
+        fail("användning: forge-theme list|render <system-repo>")
+    repo = Path(sys.argv[2]).expanduser().resolve()
+    (render if sys.argv[1] == "render" else list_themes)(repo)
+
+
+if __name__ == "__main__":
+    main()

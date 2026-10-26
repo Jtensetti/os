@@ -20,14 +20,29 @@
 - `forge run`:
   - **web**: en lokal server på en *fast* port per app (räknas fram från namnet), så att
     `localStorage` m.m. finns kvar mellan körningar. Statiska appar serveras av
-    `python3 -m http.server`; appar med `server` startar sitt eget kommando med `$PORT`.
-    Fönstret är Chromium i `--app`-läge med en egen profil per app och klassen `forge-<app>`
+    `libexec/forge-serve`; appar med `server` startar sitt eget kommando med `$PORT`.
+    Fönstret är Chromium i `--app`-läge med en egen profil per app på adressen `http://<app>.localhost:<port>`
     (så Super+E vet vilken app som har fokus).
   - **cli/native**: körs direkt i sandlådan.
 - Sandlåda (`libexec/forge-sandbox`, bubblewrap): systemet skrivskyddat, tomt `$HOME`,
-  bara appkatalogen och `$FORGE_DATA_DIR` skrivbara, extra mappar/nätverk enligt manifestet.
+  bara appkatalogen och `$FORGE_DATA_DIR` skrivbara, extra mappar enligt manifestet.
+  Internet är på som standard; `"network": false` stänger av det.
 - Data: `~/.local/share/forge/appdata/<app>/` — separerat från koden, så `undo` och
   uppdateringar aldrig rör data.
+
+## Teman
+`~/Forge/system/theme/`: `active`, `themes/<namn>.theme` (palett), `templates/**.tmpl`.
+`libexec/forge-theme render` byter ut `{{nyckel}}` och skriver filerna till `~` (Hyprland-färger,
+låsskärm, Waybar, Alacritty, fuzzel, mako, `~/.config/forge/app.css`). Hooken
+`hooks/user/08-theme.sh` renderar och laddar om allt live; GTK:s `color-scheme` sätts efter
+`mode` så att appfönster följer ljust/mörkt. `forge-serve` levererar `app.css` som
+`/_forge/theme.css` till varje webbapp. Bakgrundsbilder: `/usr/share/forge/wallpapers/`.
+
+## Lokal AI
+`forge agent local [modell] [--engine codex|claude]`. Samma agentprogram, lokal modell via Ollama:
+Codex med `--oss --local-provider ollama`, Claude Code med `ANTHROPIC_BASE_URL` mot Ollamas
+Anthropic-kompatibla API. Ollama installeras av `hooks/root/25-ollama.sh`; modellen hämtas vid
+första användning.
 
 ## Systemet som kod
 `~/Forge/system` (kopierat från `system/` vid installation):
@@ -53,12 +68,12 @@ Codex: `--full-auto` = skrivrätt bara i arbetskatalogen).
 - Agenten kan skriva i app- eller systemrepot, men inte verkställa systemändringar själv.
 - Allt agenten gör är en git-commit → går att granska och ångra.
 - Delade appar granskas av agenten innan installation, och du ser behörigheterna.
-- Begränsning idag: webbappars JavaScript körs i Chromiums sandlåda men Forge begränsar inte
-  deras nätverk. Se roadmap.
+- Appar har internet som standard (det är poängen med många appar). Filåtkomst utanför
+  appen är det som kräver uttrycklig behörighet.
 
 ## Roadmap
-1. Testa install.sh och ISO:n i en VM på Ubuntu 26.04, rätta paketnamn.
-2. Nätverksspärr för webbappar (CSP-header från servern + proxy) så att `network: false` gäller helt.
+1. Testa install.sh och ISO:n i en VM på Ubuntu 26.04, rätta paketnamn. Skärmdump från riktig Hyprland.
+2. `network: false` även för webbappars JavaScript (CSP-header från Forge-servern).
 3. "Forge Store": bläddra bland delade appar (git-baserat index), med granskningsrapport.
 4. Systemändringar som förslag-grenar: prova en ändring, behåll eller kasta.
 5. Fler mallar: Tauri (native-känsla), Python+GTK, spel (canvas).

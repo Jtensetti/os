@@ -1,0 +1,17 @@
+# Forge-tema: matte-black. Färger som rrggbb (utan #).
+mode=dark
+bg=121212
+bg_alt=0b0b0b
+surface=1c1c1c
+fg=eaeaea
+muted=8a8a8d
+accent=e68e0d
+accent2=d35f5f
+red=d35f5f
+green=9fb98a
+yellow=e68e0d
+blue=8aa2b7
+magenta=b07ea8
+cyan=8ab4b0
+border=2a2a2a
+wallpaper=matte-black.jpg

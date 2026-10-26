@@ -5,7 +5,7 @@
 greetd
 tuigreet
 hyprland
-hyprpaper
+swaybg
 hypridle
 hyprlock
 xdg-desktop-portal-hyprland
@@ -25,6 +25,11 @@ wireplumber
 fonts-inter
 fonts-jetbrains-mono
 fonts-noto-color-emoji
+fonts-symbols-only-nerdfont   # ikoner i panelen
+papirus-icon-theme
+libnotify-bin
+
+# Lokal AI (Ollama installeras av hooks/root/25-ollama.sh)
 
 # Forge-kärnan
 git

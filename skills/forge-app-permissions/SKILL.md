@@ -9,8 +9,9 @@ Server- och cli-processer körs i bubblewrap (`forge-sandbox`). De ser:
 - ett tomt `$HOME` — inga andra filer om de inte begärs.
 
 Begär i `forge.json` under `permissions`:
-- `"network": true` — internetåtkomst (krävs för API-anrop, nedladdningar).
-  Appar med `server` får nätverk automatiskt eftersom fönstret måste nå servern.
+- Internet är **på som standard** — appar får hämta data, anropa API:er osv.
+  Sätt `"network": false` för appar som inte behöver nätet (t.ex. en lokal dagbok);
+  då kan server- och cli-processen inte nå internet.
 - `"files": ["~/Documents", "~/Music:ro"]` — extra kataloger, `:ro` = skrivskyddat.
 - `"display": true` — för cli/native-appar som öppnar egna fönster (Wayland/GPU).
 

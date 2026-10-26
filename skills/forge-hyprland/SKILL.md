@@ -9,8 +9,10 @@ Konfig: `~/Forge/system/home/.config/hypr/hyprland.conf`. Laddas om automatiskt 
 - Modifierare: `$mod = SUPER`. Forge-tangenter är reserverade: `Super+A` (ny app),
   `Super+E` (ändra app i fokus), `Super+Shift+A` (ändra systemet), `Super+/` (agent).
 - Kortkommando: `bind = $mod, T, exec, kommando`. Musknapp: `bindm`. Upprepning: `binde`.
-- Fönsterregler: `windowrulev2 = float, class:^(forge-<app>)$`. Forge-appar har klassen `forge-<app>`.
+- Fönsterregler: `windowrulev2 = float, class:^(chrome-<app>\.localhost__.*)$`. Forge-appars fönster har klassen `chrome-<app>.localhost__…`.
 - Skärmar: `monitor = NAMN, 2560x1440@144, 0x0, 1` (`hyprctl monitors` visar namn).
-- Färger kommer från `~/.config/forge/theme.conf` (`$accent`, `$border`, `$bg`, `$fg`).
+- Färger kommer från temat via `~/.config/hypr/colors.conf` (`$accent`, `$accent2`, `$border`, `$bg`, `$fg`),
+  som renderas från `theme/templates/.config/hypr/colors.conf.tmpl`. Ändra inte colors.conf direkt.
+- Super+Shift+T byter tema. Effekter (blur, rundning, skuggor, animationer) finns i hyprland.conf.
 - Autostart: `exec-once = program`.
 - Kontrollera att ett nytt kortkommando inte krockar med ett befintligt (sök i filen först).

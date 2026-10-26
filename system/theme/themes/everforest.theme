@@ -1,0 +1,17 @@
+# Forge-tema: everforest. Färger som rrggbb (utan #).
+mode=dark
+bg=2d353b
+bg_alt=272e33
+surface=343f44
+fg=d3c6aa
+muted=859289
+accent=a7c080
+accent2=83c092
+red=e67e80
+green=a7c080
+yellow=dbbc7f
+blue=7fbbb3
+magenta=d699b6
+cyan=83c092
+border=475258
+wallpaper=everforest.jpg

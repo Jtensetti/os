@@ -1,0 +1,45 @@
+# Genererad av forge-theme ({{name}})
+general { hide_cursor = true }
+
+background {
+  path = {{wallpaper}}
+  blur_passes = 3
+  blur_size = 8
+  brightness = 0.7
+}
+
+label {
+  text = cmd[update:1000] date +"%H:%M"
+  font_family = Inter Display ExtraBold
+  font_size = 110
+  color = rgb({{fg}})
+  position = 0, 160
+  halign = center
+  valign = center
+}
+
+label {
+  text = cmd[update:60000] date +"%A %-d %B"
+  font_family = Inter
+  font_size = 18
+  color = rgba({{fg}}cc)
+  position = 0, 60
+  halign = center
+  valign = center
+}
+
+input-field {
+  size = 320, 52
+  rounding = 14
+  outline_thickness = 2
+  outer_color = rgb({{accent}}) rgb({{accent2}}) 45deg
+  inner_color = rgba({{surface}}dd)
+  font_color = rgb({{fg}})
+  check_color = rgb({{green}})
+  fail_color = rgb({{red}})
+  placeholder_text = <span foreground="##{{muted}}">Lösenord…</span>
+  fade_on_empty = false
+  position = 0, -80
+  halign = center
+  valign = center
+}

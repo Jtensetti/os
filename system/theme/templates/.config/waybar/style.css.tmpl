@@ -1,0 +1,47 @@
+/* Genererad av forge-theme ({{name}}) */
+* {
+  font-family: "Inter", "Symbols Nerd Font", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 0;
+}
+window#waybar { background: transparent; color: #{{fg}}; }
+
+.modules-left, .modules-center, .modules-right {
+  background: alpha(#{{bg}}, 0.82);
+  border: 1px solid alpha(#{{border}}, 0.9);
+  border-radius: 14px;
+  padding: 3px 6px;
+}
+
+#workspaces button {
+  color: #{{muted}};
+  padding: 2px 9px;
+  margin: 2px;
+  border-radius: 10px;
+  transition: all 150ms ease;
+}
+#workspaces button.active, #workspaces button.focused {
+  color: #{{bg}};
+  background: linear-gradient(135deg, #{{accent}}, #{{accent2}});
+  padding: 2px 16px;
+}
+#workspaces button:hover { background: alpha(#{{accent}}, 0.18); color: #{{fg}}; }
+
+#custom-forge {
+  color: #{{bg}};
+  background: linear-gradient(135deg, #{{accent}}, #{{accent2}});
+  border-radius: 10px;
+  padding: 2px 12px;
+  margin: 2px 4px;
+}
+#window { color: #{{muted}}; padding: 0 10px; font-weight: 500; }
+#clock { color: #{{fg}}; padding: 0 12px; }
+#cpu, #memory, #pulseaudio, #network, #battery, #tray { padding: 0 10px; color: #{{fg}}; }
+#cpu { color: #{{cyan}}; }
+#memory { color: #{{magenta}}; }
+#pulseaudio { color: #{{yellow}}; }
+#network { color: #{{green}}; }
+#battery.warning { color: #{{yellow}}; }
+#battery.critical { color: #{{red}}; }
+tooltip { background: #{{surface}}; border: 1px solid #{{accent}}; border-radius: 10px; }

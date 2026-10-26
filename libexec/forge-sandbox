@@ -2,8 +2,8 @@
 # forge-sandbox <app-dir> <data-dir> -- <command...>
 #
 # Runs an app process with bubblewrap: it sees the system read-only, its own
-# app and data directories read-write, and only the extra paths and network
-# access its forge.json asks for.
+# app and data directories read-write, plus internet and any extra folders
+# its forge.json asks for.
 
 set -euo pipefail
 
@@ -22,13 +22,14 @@ args=(
   --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/sbin /sbin
   --proc /proc --dev /dev --tmpfs /tmp --tmpfs "$HOME"
   --bind "$app" "$app" --bind "$data" "$data"
+  --ro-bind-try "$HOME/.config/forge/app.css" "$HOME/.config/forge/app.css"
   --die-with-parent --new-session --unshare-all
   --setenv HOME "$HOME" --chdir "$app"
 )
 
-# Apps that serve a local web UI need the network namespace so the
-# window can reach them; otherwise network is opt-in.
-if [[ "$(perm .permissions.network)" == true || -n "$(perm .server)" || "${FORGE_SANDBOX_NET:-0}" == 1 ]]; then
+# Internet is on by default; an app can opt out with "network": false
+# (apps with a local web server always keep it so the window can reach them).
+if [[ "$(perm .permissions.network)" != false || -n "$(perm .server)" || "${FORGE_SANDBOX_NET:-0}" == 1 ]]; then
   args+=(--share-net --ro-bind-try /run/systemd/resolve /run/systemd/resolve)
 fi
 

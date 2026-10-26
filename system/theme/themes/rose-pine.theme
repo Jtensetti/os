@@ -1,0 +1,17 @@
+# Forge-tema: rose-pine. Färger som rrggbb (utan #).
+mode=dark
+bg=191724
+bg_alt=1f1d2e
+surface=26233a
+fg=e0def4
+muted=6e6a86
+accent=ebbcba
+accent2=c4a7e7
+red=eb6f92
+green=31748f
+yellow=f6c177
+blue=9ccfd8
+magenta=c4a7e7
+cyan=9ccfd8
+border=403d52
+wallpaper=rose-pine.jpg

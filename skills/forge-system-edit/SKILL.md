@@ -13,10 +13,10 @@ och ändra **aldrig** direkt i `/` eller `~`.
 |---|---|
 | Installera/ta bort program | `packages/apt.list`, `packages/flatpak.list` (en per rad) |
 | Kortkommandon, fönster, skärmar, tangentbord | `home/.config/hypr/hyprland.conf` |
-| Färger/tema | `home/.config/forge/theme.conf`, teman i `home/.config/forge/themes/` |
-| Panelen | `home/.config/waybar/` |
-| Appstartaren | `home/.config/fuzzel/fuzzel.ini` |
-| Notiser | `home/.config/mako/config` |
+| Färger, tema, bakgrund | `theme/` — se skillen forge-theme |
+| Panelens innehåll | `home/.config/waybar/config.jsonc` (stilen: `theme/templates/.config/waybar/`) |
+| Appstartare, notiser, terminal, låsskärm (utseende) | `theme/templates/.config/…` |
+| Lokal AI | se skillen forge-local-ai |
 | Systemfiler i `/etc` m.m. | `rootfs/<sökväg>` (speglas till `/`) |
 | Dotfiles i hemkatalogen | `home/<sökväg>` (speglas till `~`) |
 | Tjänster | `services/system.list`, `services/user.list`; unit-filer i `rootfs/etc/systemd/...` eller `home/.config/systemd/user/` |

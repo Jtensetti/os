@@ -1,14 +1,32 @@
 {
   "layer": "top",
-  "height": 28,
-  "modules-left": ["hyprland/workspaces", "custom/forge"],
+  "position": "top",
+  "height": 34,
+  "margin-top": 8,
+  "margin-left": 14,
+  "margin-right": 14,
+  "spacing": 6,
+  "modules-left": ["custom/forge", "hyprland/workspaces", "hyprland/window"],
   "modules-center": ["clock"],
-  "modules-right": ["pulseaudio", "network", "battery"],
+  "modules-right": ["cpu", "memory", "pulseaudio", "network", "battery", "tray"],
+
   "custom/forge": {
     "format": "✦ Bygg",
-    "tooltip-format": "Beskriv en app (Super+A)",
+    "tooltip-format": "Vänsterklick: ny app (Super+A) · Högerklick: ändra systemet (Super+Shift+A)",
     "on-click": "forge-prompt new",
-    "on-click-right": "forge-prompt system"
+    "on-click-right": "forge-prompt system",
+    "on-click-middle": "forge theme next"
   },
-  "clock": { "format": "{:%a %d %b  %H:%M}" }
+  "hyprland/workspaces": { "format": "{id}", "persistent-workspaces": { "*": 4 } },
+  "hyprland/window": { "max-length": 48, "separate-outputs": true },
+  "clock": {
+    "format": "{:%a %d %b  ·  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+  "cpu": { "format": "󰻠 {usage}%", "interval": 3 },
+  "memory": { "format": "󰍛 {percentage}%", "interval": 5 },
+  "pulseaudio": { "format": "󰕾 {volume}%", "format-muted": "󰝟", "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle" },
+  "network": { "format-wifi": "󰤨 {essid}", "format-ethernet": "󰈀 ansluten", "format-disconnected": "󰤭" },
+  "battery": { "format": "{icon} {capacity}%", "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"], "states": { "warning": 25, "critical": 10 } },
+  "tray": { "spacing": 8 }
 }

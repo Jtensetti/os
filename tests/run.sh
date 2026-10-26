@@ -47,6 +47,9 @@ FORGE_NO_WINDOW=1 "$repo/bin/forge" run testapp >"$t/url" 2>/dev/null &
 for _ in $(seq 50); do [[ -s "$t/url" ]] && break; sleep 0.1; done
 url="$(cat "$t/url")"
 curl -fs "$url" | grep -q "Byggd av agenten" && ok "run serverar appen ($url)" || fail "run"
+base="${url%index.html}"
+curl -fs "${base}_forge/theme.css" >/dev/null && ok "systemtemat serveras till appen" || fail "theme.css"
+! curl -fs "${base}.git/HEAD" >/dev/null && ok ".git syns inte utåt" || fail ".git exposed"
 kill %1 2>/dev/null || true; wait 2>/dev/null || true
 FORGE_NO_WINDOW=1 "$repo/bin/forge" run testapp >"$t/url2" 2>/dev/null &
 for _ in $(seq 50); do [[ -s "$t/url2" ]] && break; sleep 0.1; done
@@ -72,9 +75,52 @@ grep -q '^htop$' "$sys/packages/apt.list" && ok "agenten ändrar systemrepot" ||
 [[ -L "$HOME/.claude/CLAUDE.md" ]] && ok "globala instruktioner" || fail "agents.md"
 [[ -f "$FORGE_ROOT/etc/forge-test/file" ]] && ok "rootfs speglas" || fail "rootfs"
 
+grep -q "#0f0e17" "$HOME/.config/waybar/style.css" && ok "temat renderas (forge)" || fail "theme render"
+grep -q "forge.jpg" "$HOME/.config/forge/wallpaper-path" && ok "bakgrundsbild hittas" || fail "wallpaper"
+forge theme nord >/dev/null 2>&1
+grep -q "#2e3440" "$HOME/.config/waybar/style.css" && grep -q "#2e3440" "$HOME/.config/forge/app.css" \
+  && grep -q "2e3440" "$HOME/.config/alacritty/alacritty.toml" && ok "forge theme byter allt" || fail "theme switch"
+[[ "$(git -C "$sys" log -1 --format=%s)" == "forge theme: nord" ]] && ok "temabyte committas" || fail "theme commit"
+forge theme next >/dev/null 2>&1
+[[ "$(cat "$sys/theme/active")" == "rose-pine" ]] && ok "theme next" || fail "theme next: $(cat "$sys/theme/active")"
+forge theme finns-inte >/dev/null 2>&1 && fail "unknown theme" || ok "okänt tema avvisas"
+[[ "$(forge theme | wc -l)" -ge 10 ]] && ok "minst 10 teman" || fail "theme count"
+git -C "$sys" reset -q --hard HEAD~2
+
 FORGE_SKIP_ROOT=1 forge system rollback >/dev/null 2>&1
 "$repo/libexec/forge-apply" --root "$sys" 2>/dev/null
 [[ ! -f "$HOME/.config/forge-test/greeting" && ! -f "$FORGE_ROOT/etc/forge-test/file" ]] && ok "rollback tar bort filerna igen" || fail "rollback"
 ! grep -q '^htop$' "$sys/packages/apt.list" && ok "rollback återställer paketlistan" || fail "rollback list"
+
+echo "Lokal AI"
+unset FORGE_AGENT_CMD
+bin="$t/fakebin"; mkdir -p "$bin" "$t/ollama/api"
+echo '{"version":"0.20.0"}' >"$t/ollama/api/version"
+python3 "$repo/libexec/forge-serve" "$t/ollama" 28111 & sleep 0.5
+cat >"$bin/ollama" <<'SH'
+#!/usr/bin/env bash
+[[ "$1" == list ]] && printf 'NAME ID\ngpt-oss:20b x\nqwen3-coder:30b y\n'
+exit 0
+SH
+cat >"$bin/codex" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >"$FAKE_LOG"
+SH
+cat >"$bin/claude" <<'SH'
+#!/usr/bin/env bash
+printf '%s|%s|%s\n' "$ANTHROPIC_BASE_URL" "$ANTHROPIC_MODEL" "$*" >"$FAKE_LOG"
+SH
+chmod +x "$bin"/*
+export PATH="$bin:$PATH" FAKE_LOG="$t/agent.log" FORGE_OLLAMA_URL="http://127.0.0.1:28111"
+forge agent local >/dev/null 2>&1
+[[ "$(forge agent)" == "local (gpt-oss:20b via codex)" ]] && ok "forge agent local" || fail "agent local: $(forge agent)"
+forge chat "$HOME" >/dev/null 2>&1
+grep -q -- "--oss --local-provider ollama -m gpt-oss:20b" "$t/agent.log" && ok "Codex körs med lokal modell" || fail "codex oss: $(cat "$t/agent.log")"
+forge agent local qwen3-coder:30b --engine claude >/dev/null 2>&1
+FORGE_HEADLESS=1 forge new "lokal app" >/dev/null 2>&1 || true
+grep -q "^http://127.0.0.1:28111|qwen3-coder:30b|.*--permission-mode acceptEdits" "$t/agent.log" \
+  && ok "Claude Code körs mot Ollama med samma verktyg" || fail "claude local: $(cat "$t/agent.log")"
+forge agent claude >/dev/null 2>&1
+[[ "$(forge agent)" == "claude" ]] && ok "tillbaka till molnet" || fail "agent claude"
 
 echo "Alla $pass tester gick igenom."

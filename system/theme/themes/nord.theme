@@ -1,0 +1,17 @@
+# Forge-tema: nord. Färger som rrggbb (utan #).
+mode=dark
+bg=2e3440
+bg_alt=272c36
+surface=3b4252
+fg=eceff4
+muted=7b88a1
+accent=88c0d0
+accent2=81a1c1
+red=bf616a
+green=a3be8c
+yellow=ebcb8b
+blue=5e81ac
+magenta=b48ead
+cyan=8fbcbb
+border=4c566a
+wallpaper=nord.jpg

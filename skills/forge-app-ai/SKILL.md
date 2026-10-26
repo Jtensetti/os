@@ -8,7 +8,7 @@ description: Build Forge apps that themselves use an AI model (Claude or OpenAI)
   direkt från webbsidans JavaScript.
 - Nyckeln läses vid körning från `~/.config/forge/secrets.env` (variabler som
   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`). Lägg den sökvägen som `"~/.config/forge/secrets.env:ro"`
-  i `permissions.files` och `"network": true`. Skriv aldrig in en nyckel i koden.
+  i `permissions.files` (internet är på som standard). Skriv aldrig in en nyckel i koden.
 - Saknas nyckeln: visa ett vänligt meddelande om var man lägger in den.
 - Använd senaste modellerna och strömma svar när det är chatt. Begränsa max tokens.
 - Skicka bara den data som behövs till modellen, och säg i gränssnittet att den skickas.

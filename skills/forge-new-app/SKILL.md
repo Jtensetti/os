@@ -15,8 +15,8 @@ Du står i `~/Apps/<app>/` med en mall: `forge.json`, `index.html`, `app.js`, `f
    - `cli`: ett terminalverktyg. `entry` pekar på ett körbart skript.
 2. Uppdatera `forge.json`: `name` (snyggt visningsnamn), `description` (en mening),
    `entry`, `kind`, ev. `server`, och **minsta möjliga** `permissions` (se forge-app-permissions).
-3. Bygg appen. Använd `forge.css`-tokens (se forge-app-design). Inga CDN:er om appen
-   ska fungera offline — lägg in bibliotek lokalt i appkatalogen om de behövs.
+3. Bygg appen. Använd `forge.css`-tokens (se forge-app-design). Appar får använda
+   internet (API:er, CDN:er). Lägg ändå in viktiga bibliotek lokalt så att appen startar offline.
 4. Rita en egen `icon.svg` (64×64, enkel symbol på färgad rundad ruta).
 5. Testa det du kan: öppna inte fönster, men kör t.ex. `node --check app.js`, starta servern
    kort och `curl` den, eller kör cli-skriptet med `--help`.
@@ -30,7 +30,7 @@ Du står i `~/Apps/<app>/` med en mall: `forge.json`, `index.html`, `app.js`, `f
   "entry": "index.html",
   "icon": "icon.svg",
   "server": "python3 server.py",
-  "permissions": { "network": false, "files": ["~/Documents:ro"], "display": false }
+  "permissions": { "network": true, "files": ["~/Documents:ro"], "display": false }
 }
 ```
 `server` och `permissions` är valfria. `entry` måste vara en relativ sökväg som finns.

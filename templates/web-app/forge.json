@@ -5,7 +5,7 @@
   "entry": "index.html",
   "icon": "icon.svg",
   "permissions": {
-    "network": false,
+    "network": true,
     "files": []
   }
 }

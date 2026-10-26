@@ -58,37 +58,64 @@ git_commit_all() {
     commit -q -m "$msg"
 }
 
-# Run the configured coding agent in a directory with a prompt.
-# Mode "app" may only touch the app directory; "system" must never use sudo.
+# Run the configured coding agent in a directory. With an empty prompt the
+# agent starts as an open chat. Every engine gets the same tools (files,
+# shell, MCP, skills); "local" just swaps the model for one on this machine.
 run_agent() {
-  local dir="$1" prompt="$2" mode="${3:-app}"
+  local dir="$1" prompt="${2:-}"
   if [[ -n "${FORGE_AGENT_CMD:-}" ]]; then
     # Escape hatch for tests and custom agents: called as CMD <dir> <prompt>.
     (cd "$dir" && $FORGE_AGENT_CMD "$dir" "$prompt")
     return
   fi
-  case "$FORGE_AGENT" in
+  local engine="$FORGE_AGENT" local_model=""
+  if [[ "$engine" == local ]]; then
+    engine="${FORGE_LOCAL_ENGINE:-codex}"
+    local_model="${FORGE_LOCAL_MODEL:-gpt-oss:20b}"
+    ensure_ollama
+  fi
+  local -a agent_cmd env_vars=()
+  case "$engine" in
     claude)
       need claude
-      local args=(--disallowedTools "Bash(sudo:*)" "Bash(su:*)" "Bash(pkexec:*)")
-      if [[ "$FORGE_HEADLESS" == 1 ]]; then
-        (cd "$dir" && claude -p "$prompt" --permission-mode acceptEdits "${args[@]}")
-      else
-        (cd "$dir" && claude --permission-mode acceptEdits "${args[@]}" "$prompt")
+      agent_cmd=(claude --permission-mode acceptEdits --disallowedTools "Bash(sudo:*)" "Bash(su:*)" "Bash(pkexec:*)")
+      if [[ -n "$local_model" ]]; then
+        # Ollama speaks the Anthropic Messages API; map every model tier to the local one.
+        env_vars=(ANTHROPIC_BASE_URL="$FORGE_OLLAMA_URL" ANTHROPIC_AUTH_TOKEN=ollama ANTHROPIC_API_KEY=
+                  ANTHROPIC_MODEL="$local_model" ANTHROPIC_DEFAULT_OPUS_MODEL="$local_model"
+                  ANTHROPIC_DEFAULT_SONNET_MODEL="$local_model" ANTHROPIC_DEFAULT_HAIKU_MODEL="$local_model"
+                  ANTHROPIC_SMALL_FAST_MODEL="$local_model")
       fi
+      if [[ "$FORGE_HEADLESS" == 1 && -n "$prompt" ]]; then agent_cmd+=(-p "$prompt")
+      elif [[ -n "$prompt" ]]; then agent_cmd+=("$prompt"); fi
       ;;
     codex)
       need codex
-      # workspace-write sandbox: Codex can only write inside $dir.
-      if [[ "$FORGE_HEADLESS" == 1 ]]; then
-        (cd "$dir" && codex exec --full-auto "$prompt")
-      else
-        (cd "$dir" && codex --full-auto "$prompt")
-      fi
+      # --full-auto = workspace-write sandbox: Codex can only write inside $dir.
+      if [[ "$FORGE_HEADLESS" == 1 && -n "$prompt" ]]; then agent_cmd=(codex exec --full-auto)
+      else agent_cmd=(codex --full-auto); fi
+      [[ -n "$local_model" ]] && agent_cmd+=(--oss --local-provider ollama -m "$local_model")
+      [[ -n "$prompt" ]] && agent_cmd+=("$prompt")
       ;;
-    *) die "okänd agent '$FORGE_AGENT' (claude eller codex)" ;;
+    *) die "okänd agent '$FORGE_AGENT' (claude, codex eller local)" ;;
   esac
-  : "$mode"
+  (cd "$dir" && env "${env_vars[@]}" "${agent_cmd[@]}")
+}
+
+FORGE_OLLAMA_URL="${FORGE_OLLAMA_URL:-http://localhost:11434}"
+
+ensure_ollama() {
+  need ollama
+  if ! curl -fs "$FORGE_OLLAMA_URL/api/version" >/dev/null 2>&1; then
+    info "Startar Ollama…"
+    (ollama serve >/dev/null 2>&1 &)
+    local _i; for _i in $(seq 50); do curl -fs "$FORGE_OLLAMA_URL/api/version" >/dev/null 2>&1 && break; sleep 0.2; done
+  fi
+  local model="${FORGE_LOCAL_MODEL:-gpt-oss:20b}"
+  if ! ollama list 2>/dev/null | awk 'NR>1{print $1}' | grep -qxF "$model"; then
+    info "Laddar ner $model (en gång, kan ta en stund)…"
+    ollama pull "$model"
+  fi
 }
 
 manifest_get() {
@@ -137,8 +164,8 @@ Bygg en ny Forge-app i den här katalogen. Användarens beskrivning:
 "$text"
 
 Följ skillen forge-new-app (och forge-app-design). Katalogen innehåller redan en mall.
-Krav: forge.json ska vara giltig, appen ska fungera offline om inget annat krävs,
-spara data enligt forge-app-data, rör inga filer utanför den här katalogen.
+Krav: forge.json ska vara giltig, spara data enligt forge-app-data,
+rör inga filer utanför den här katalogen. Appen får använda internet.
 Avsluta med en kort sammanfattning på svenska av vad du byggde.
 EOF
     ;;
@@ -175,7 +202,7 @@ cmd_new() {
   git_commit_all "$dir" "forge: mall"
 
   info "Låter $FORGE_AGENT bygga appen…"
-  run_agent "$dir" "$(app_prompt new "$desc")" app
+  run_agent "$dir" "$(app_prompt new "$desc")"
   validate_app "$dir"
   git_commit_all "$dir" "forge new: $desc"
   install_desktop_entry "$slug"
@@ -189,7 +216,7 @@ cmd_edit() {
   local change; change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Vad ska ändras? " c; printf '%s' "$c"; fi)"
   [[ -n "$change" ]] || die "ändringen är tom"
   git_commit_all "$dir" "forge: osparade ändringar"
-  run_agent "$dir" "$(app_prompt edit "$change")" app
+  run_agent "$dir" "$(app_prompt edit "$change")"
   validate_app "$dir"
   git_commit_all "$dir" "forge edit: $change"
   install_desktop_entry "$slug"
@@ -233,7 +260,9 @@ cmd_run() {
       local server port url
       server="$(manifest_get "$dir" .server "")"
       port="$(app_port "$slug")"
-      url="http://127.0.0.1:$port/"
+      # <slug>.localhost resolves to 127.0.0.1 and gives the window a unique
+      # Wayland app id (chrome-<slug>.localhost__…), which Super+E uses.
+      url="http://$slug.localhost:$port/"
       [[ -z "$server" ]] && url+="$entry"
       if ! port_open "$port"; then
         export PORT="$port"
@@ -241,7 +270,7 @@ cmd_run() {
           "$FORGE_SHARE/libexec/forge-sandbox" "$dir" "$data" -- bash -c "$server" &
         else
           FORGE_SANDBOX_NET=1 "$FORGE_SHARE/libexec/forge-sandbox" "$dir" "$data" -- \
-            python3 -m http.server --bind 127.0.0.1 --directory "$dir" "$port" >/dev/null 2>&1 &
+            python3 "$FORGE_SHARE/libexec/forge-serve" "$dir" "$port" >/dev/null 2>&1 &
         fi
         FORGE_SERVER_PID=$!
         trap 'kill "$FORGE_SERVER_PID" 2>/dev/null || true' EXIT
@@ -306,7 +335,7 @@ cmd_install() {
   [[ ! -e "$FORGE_APPS/$slug" ]] || die "$slug finns redan"
 
   info "Säkerhetsgranskar appen innan installation…"
-  FORGE_HEADLESS=1 run_agent "$stage/app" "Använd skillen forge-security-review. Granska den här appen som någon annan har delat. Skriv rapporten till REVIEW.md och avsluta med exakt en rad: VERDICT: OK eller VERDICT: RISK." app || true
+  FORGE_HEADLESS=1 run_agent "$stage/app" "Använd skillen forge-security-review. Granska den här appen som någon annan har delat. Skriv rapporten till REVIEW.md och avsluta med exakt en rad: VERDICT: OK eller VERDICT: RISK." || true
   if [[ -f "$stage/app/REVIEW.md" ]]; then
     cat "$stage/app/REVIEW.md"
     grep -q 'VERDICT: OK' "$stage/app/REVIEW.md" || info "Granskningen hittade risker."
@@ -372,7 +401,7 @@ cmd_system() {
       change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Hur vill du ändra systemet? " c; printf '%s' "$c"; fi)"
       [[ -n "$change" ]] || die "ändringen är tom"
       git_commit_all "$FORGE_SYSTEM" "forge: osparade ändringar"
-      run_agent "$FORGE_SYSTEM" "$(system_prompt "$change")" system
+      run_agent "$FORGE_SYSTEM" "$(system_prompt "$change")"
       if git -C "$FORGE_SYSTEM" diff --quiet HEAD && [[ -z "$(git -C "$FORGE_SYSTEM" status --porcelain)" ]]; then
         info "Agenten ändrade inget."; return 0
       fi
@@ -403,23 +432,67 @@ system_apply() {
   info "Systemet är uppdaterat."
 }
 
+set_config() {
+  mkdir -p "$(dirname "$FORGE_CONFIG_FILE")"; touch "$FORGE_CONFIG_FILE"
+  if grep -q "^$1=" "$FORGE_CONFIG_FILE"; then
+    sed -i "s|^$1=.*|$1=$2|" "$FORGE_CONFIG_FILE"
+  else
+    printf '%s=%s\n' "$1" "$2" >>"$FORGE_CONFIG_FILE"
+  fi
+}
+
 cmd_agent() {
   local a="${1:-}"
-  if [[ -z "$a" ]]; then printf '%s\n' "$FORGE_AGENT"; return; fi
-  [[ "$a" == claude || "$a" == codex ]] || die "välj claude eller codex"
-  mkdir -p "$(dirname "$FORGE_CONFIG_FILE")"
-  touch "$FORGE_CONFIG_FILE"
-  if grep -q '^FORGE_AGENT=' "$FORGE_CONFIG_FILE"; then
-    sed -i "s/^FORGE_AGENT=.*/FORGE_AGENT=$a/" "$FORGE_CONFIG_FILE"
-  else
-    printf 'FORGE_AGENT=%s\n' "$a" >>"$FORGE_CONFIG_FILE"
+  if [[ -z "$a" ]]; then
+    printf '%s' "$FORGE_AGENT"
+    [[ "$FORGE_AGENT" == local ]] && printf ' (%s via %s)' "${FORGE_LOCAL_MODEL:-gpt-oss:20b}" "${FORGE_LOCAL_ENGINE:-codex}"
+    printf '\n'; return
   fi
-  info "Agent: $a"
+  case "$a" in
+    claude|codex) ;;
+    local)
+      # forge agent local [modell] [--engine claude|codex]
+      shift
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --engine) [[ "${2:-}" == claude || "${2:-}" == codex ]] || die "--engine claude|codex"
+                    set_config FORGE_LOCAL_ENGINE "$2"; FORGE_LOCAL_ENGINE="$2"; shift 2 ;;
+          *) set_config FORGE_LOCAL_MODEL "$1"; FORGE_LOCAL_MODEL="$1"; shift ;;
+        esac
+      done
+      ;;
+    *) die "välj claude, codex eller local" ;;
+  esac
+  set_config FORGE_AGENT "$a"
+  FORGE_AGENT="$a"
+  info "Agent: $(cmd_agent)"
+}
+
+cmd_theme() {
+  [[ -d "$FORGE_SYSTEM/theme" ]] || die "$FORGE_SYSTEM/theme finns inte"
+  local name="${1:-}"
+  if [[ -z "$name" ]]; then "$FORGE_SHARE/libexec/forge-theme" list "$FORGE_SYSTEM"; return; fi
+  if [[ "$name" == next ]]; then
+    # Cycle to the next theme (bound to Super+Shift+T).
+    name="$("$FORGE_SHARE/libexec/forge-theme" list "$FORGE_SYSTEM" | awk '
+      {n[NR]=$NF; if ($1=="*") a=NR} END {print n[a % NR + 1]}')"
+  fi
+  [[ -f "$FORGE_SYSTEM/theme/themes/$name.theme" ]] || die "temat '$name' finns inte (se 'forge theme')"
+  printf '%s\n' "$name" >"$FORGE_SYSTEM/theme/active"
+  git_commit_all "$FORGE_SYSTEM" "forge theme: $name"
+  system_apply --user
+  command -v notify-send >/dev/null && notify-send -a Forge "Tema: $name" 2>/dev/null || true
+  info "Tema: $name"
+}
+
+cmd_chat() {
+  # Open-ended agent session (Super+/), in the home directory by default.
+  run_agent "${1:-$HOME}" ""
 }
 
 cmd_doctor() {
   local c ok=1
-  for c in git jq python3 claude codex bwrap; do
+  for c in git jq python3 claude codex ollama bwrap; do
     if command -v "$c" >/dev/null; then printf '  ✓ %s\n' "$c"; else printf '  ✗ %s\n' "$c"; ok=0; fi
   done
   printf '  browser: %s\n' "$(find_browser || true)"
@@ -446,9 +519,13 @@ Appar
 Systemet
   forge system "ändring"               låt agenten ändra själva OS:et
   forge system diff|log|apply [--user]|rollback
+  forge theme [namn|next]              visa/byt tema (hela systemet + alla appar)
 
 Övrigt
-  forge agent [claude|codex]           visa/byt AI-agent
+  forge agent [claude|codex]           visa/byt AI-agent (moln)
+  forge agent local [modell] [--engine claude|codex]
+                                       lokal AI via Ollama, samma verktyg
+  forge chat                           öppen chatt med agenten
   forge doctor                         kontrollera beroenden
 EOF
 }
@@ -468,6 +545,8 @@ main() {
     sync) cmd_sync ;;
     system|sys) cmd_system "$@" ;;
     agent) cmd_agent "$@" ;;
+    chat) cmd_chat "$@" ;;
+    theme) cmd_theme "$@" ;;
     doctor) cmd_doctor ;;
     version|--version) printf 'forge %s\n' "$FORGE_VERSION" ;;
     help|-h|--help) usage ;;

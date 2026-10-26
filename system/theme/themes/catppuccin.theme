@@ -1,0 +1,17 @@
+# Forge-tema: catppuccin. Färger som rrggbb (utan #).
+mode=dark
+bg=1e1e2e
+bg_alt=181825
+surface=313244
+fg=cdd6f4
+muted=7f849c
+accent=cba6f7
+accent2=f5c2e7
+red=f38ba8
+green=a6e3a1
+yellow=f9e2af
+blue=89b4fa
+magenta=f5c2e7
+cyan=94e2d5
+border=45475a
+wallpaper=catppuccin.jpg
