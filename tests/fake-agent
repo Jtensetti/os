@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Stand-in for Claude Code / Codex in tests: fake-agent <dir> <prompt>
+set -euo pipefail
+dir="$1" prompt="$2"
+cd "$dir"
+case "$prompt" in
+  *forge-security-review*)
+    printf '# Granskning\nInget konstigt.\nVERDICT: OK\n' > REVIEW.md ;;
+  *"redigerar hela operativsystemet"*)
+    echo "htop" >> packages/apt.list
+    mkdir -p home/.config/forge-test && echo "hej" > home/.config/forge-test/greeting
+    mkdir -p rootfs/etc/forge-test && echo "root" > rootfs/etc/forge-test/file ;;
+  *"Ändra den här Forge-appen"*)
+    sed -i 's|<h1>.*</h1>|<h1>Ändrad</h1>|' index.html ;;
+  *)
+    jq '.name = "Testapp"' forge.json > f.tmp && mv f.tmp forge.json
+    sed -i 's|<h1>.*</h1>|<h1>Byggd av agenten</h1>|' index.html ;;
+esac

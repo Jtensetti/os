@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+# forge — describe an app or a system change, and an AI agent builds it.
+#
+# Apps live in ~/Apps/<slug>, each its own git repo, so they are saved,
+# versioned and editable later. The whole OS is described by a git repo
+# in ~/Forge/system that the agent may edit; applying it needs your OK.
+
+set -euo pipefail
+
+FORGE_VERSION="0.1.0"
+FORGE_HOME="${FORGE_HOME:-$HOME/Forge}"
+FORGE_APPS="${FORGE_APPS:-$HOME/Apps}"
+FORGE_SYSTEM="${FORGE_SYSTEM:-$FORGE_HOME/system}"
+FORGE_DATA="${FORGE_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/forge}"
+FORGE_CONFIG_FILE="${FORGE_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/forge/config}"
+FORGE_SHARE="${FORGE_SHARE:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+FORGE_APPLICATIONS="${FORGE_APPLICATIONS:-${XDG_DATA_HOME:-$HOME/.local/share}/applications}"
+
+# shellcheck source=/dev/null
+[[ -f "$FORGE_CONFIG_FILE" ]] && source "$FORGE_CONFIG_FILE"
+FORGE_AGENT="${FORGE_AGENT:-claude}"
+FORGE_HEADLESS="${FORGE_HEADLESS:-0}"
+FORGE_YES="${FORGE_YES:-0}"
+
+die()  { printf 'forge: %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[1;35m▸\033[0m %s\n' "$*" >&2; }
+
+confirm() {
+  [[ "$FORGE_YES" == 1 ]] && return 0
+  local reply
+  read -r -p "$1 [j/N] " reply
+  [[ "$reply" =~ ^[jJyY] ]]
+}
+
+need() { command -v "$1" >/dev/null 2>&1 || die "saknar '$1' — kör 'forge doctor'"; }
+
+slugify() {
+  python3 - "$1" <<'PY'
+import re, sys, unicodedata
+s = unicodedata.normalize("NFKD", sys.argv[1]).encode("ascii", "ignore").decode().lower()
+words = [w for w in re.split(r"[^a-z0-9]+", s) if w][:4]
+print("-".join(words) or "app", end="")
+PY
+}
+
+app_dir() {
+  local slug="${1:-}"
+  [[ -n "$slug" ]] || die "ange en app (se 'forge list')"
+  [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "ogiltigt appnamn: $slug"
+  printf '%s/%s' "$FORGE_APPS" "$slug"
+}
+
+git_commit_all() {
+  local dir="$1" msg="$2"
+  git -C "$dir" add -A
+  git -C "$dir" diff --cached --quiet && return 0
+  git -C "$dir" -c user.name="${GIT_AUTHOR_NAME:-Forge}" -c user.email="${GIT_AUTHOR_EMAIL:-forge@localhost}" \
+    commit -q -m "$msg"
+}
+
+# Run the configured coding agent in a directory with a prompt.
+# Mode "app" may only touch the app directory; "system" must never use sudo.
+run_agent() {
+  local dir="$1" prompt="$2" mode="${3:-app}"
+  if [[ -n "${FORGE_AGENT_CMD:-}" ]]; then
+    # Escape hatch for tests and custom agents: called as CMD <dir> <prompt>.
+    (cd "$dir" && $FORGE_AGENT_CMD "$dir" "$prompt")
+    return
+  fi
+  case "$FORGE_AGENT" in
+    claude)
+      need claude
+      local args=(--disallowedTools "Bash(sudo:*)" "Bash(su:*)" "Bash(pkexec:*)")
+      if [[ "$FORGE_HEADLESS" == 1 ]]; then
+        (cd "$dir" && claude -p "$prompt" --permission-mode acceptEdits "${args[@]}")
+      else
+        (cd "$dir" && claude --permission-mode acceptEdits "${args[@]}" "$prompt")
+      fi
+      ;;
+    codex)
+      need codex
+      # workspace-write sandbox: Codex can only write inside $dir.
+      if [[ "$FORGE_HEADLESS" == 1 ]]; then
+        (cd "$dir" && codex exec --full-auto "$prompt")
+      else
+        (cd "$dir" && codex --full-auto "$prompt")
+      fi
+      ;;
+    *) die "okänd agent '$FORGE_AGENT' (claude eller codex)" ;;
+  esac
+  : "$mode"
+}
+
+manifest_get() {
+  # manifest_get <app-dir> <jq-filter> [default]
+  local v
+  v="$(jq -r "$2 // empty" "$1/forge.json" 2>/dev/null || true)"
+  printf '%s' "${v:-${3:-}}"
+}
+
+validate_app() {
+  local dir="$1"
+  [[ -f "$dir/forge.json" ]] || die "$dir saknar forge.json"
+  jq -e '.name and .entry' "$dir/forge.json" >/dev/null || die "forge.json måste ha 'name' och 'entry'"
+  local entry; entry="$(manifest_get "$dir" .entry)"
+  [[ "$entry" != /* && "$entry" != *..* ]] || die "entry måste vara en relativ sökväg i appen"
+  [[ -e "$dir/$entry" ]] || die "entry '$entry' finns inte"
+}
+
+install_desktop_entry() {
+  local slug="$1" dir; dir="$(app_dir "$slug")"
+  mkdir -p "$FORGE_APPLICATIONS"
+  local name icon comment
+  name="$(manifest_get "$dir" .name "$slug")"
+  comment="$(manifest_get "$dir" .description "Byggd med Forge")"
+  icon="$(manifest_get "$dir" .icon "")"
+  [[ -n "$icon" && -f "$dir/$icon" ]] && icon="$dir/$icon" || icon="applications-other"
+  cat >"$FORGE_APPLICATIONS/forge-$slug.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$name
+Comment=$comment
+Exec=forge run $slug
+Icon=$icon
+Categories=Forge;Utility;
+X-Forge-App=$slug
+EOF
+  command -v update-desktop-database >/dev/null && update-desktop-database -q "$FORGE_APPLICATIONS" 2>/dev/null || true
+}
+
+app_prompt() {
+  local kind="$1" text="$2"
+  case "$kind" in
+    new) cat <<EOF
+Bygg en ny Forge-app i den här katalogen. Användarens beskrivning:
+
+"$text"
+
+Följ skillen forge-new-app (och forge-app-design). Katalogen innehåller redan en mall.
+Krav: forge.json ska vara giltig, appen ska fungera offline om inget annat krävs,
+spara data enligt forge-app-data, rör inga filer utanför den här katalogen.
+Avsluta med en kort sammanfattning på svenska av vad du byggde.
+EOF
+    ;;
+    edit) cat <<EOF
+Ändra den här Forge-appen. Användarens önskemål:
+
+"$text"
+
+Följ skillen forge-edit-app. Behåll befintlig data och funktioner som inte berörs.
+Rör inga filer utanför den här katalogen. Avsluta med en kort sammanfattning på svenska.
+EOF
+    ;;
+  esac
+}
+
+# ---------------------------------------------------------------- commands
+
+cmd_new() {
+  local name=""
+  if [[ "${1:-}" == "--name" ]]; then name="$2"; shift 2; fi
+  local desc; desc="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Beskriv appen: " d; printf '%s' "$d"; fi)"
+  [[ -n "$desc" ]] || die "beskrivningen är tom"
+  local slug; slug="$(slugify "${name:-$desc}")"
+  local base="$slug" n=2
+  while [[ -e "$FORGE_APPS/$slug" ]]; do slug="$base-$n"; n=$((n + 1)); done
+  local dir; dir="$(app_dir "$slug")"
+
+  info "Skapar $slug i $dir"
+  mkdir -p "$FORGE_APPS"
+  cp -r "$FORGE_SHARE/templates/web-app" "$dir"
+  jq --arg n "${name:-$slug}" --arg d "$desc" '.name = $n | .description = $d' \
+    "$dir/forge.json" >"$dir/forge.json.tmp" && mv "$dir/forge.json.tmp" "$dir/forge.json"
+  git -C "$dir" init -q
+  git_commit_all "$dir" "forge: mall"
+
+  info "Låter $FORGE_AGENT bygga appen…"
+  run_agent "$dir" "$(app_prompt new "$desc")" app
+  validate_app "$dir"
+  git_commit_all "$dir" "forge new: $desc"
+  install_desktop_entry "$slug"
+  info "Klar! Starta med: forge run $slug (eller från appmenyn)"
+}
+
+cmd_edit() {
+  local slug="${1:-}"; shift || true
+  local dir; dir="$(app_dir "$slug")"
+  [[ -d "$dir" ]] || die "ingen app som heter $slug"
+  local change; change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Vad ska ändras? " c; printf '%s' "$c"; fi)"
+  [[ -n "$change" ]] || die "ändringen är tom"
+  git_commit_all "$dir" "forge: osparade ändringar"
+  run_agent "$dir" "$(app_prompt edit "$change")" app
+  validate_app "$dir"
+  git_commit_all "$dir" "forge edit: $change"
+  install_desktop_entry "$slug"
+  info "Uppdaterad. Ångra med: forge undo $slug"
+}
+
+cmd_list() {
+  [[ -d "$FORGE_APPS" ]] || return 0
+  local d slug
+  for d in "$FORGE_APPS"/*/; do
+    [[ -f "$d/forge.json" ]] || continue
+    slug="$(basename "$d")"
+    printf '%-24s %s\n' "$slug" "$(manifest_get "$d" .description "")"
+  done
+}
+
+app_port() { printf '%s' "$(( 20000 + $(printf '%s' "$1" | cksum | cut -d' ' -f1) % 10000 ))"; }
+port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+find_browser() {
+  local b
+  for b in "${FORGE_BROWSER:-}" chromium chromium-browser google-chrome brave-browser microsoft-edge; do
+    [[ -n "$b" ]] && command -v "$b" >/dev/null && { printf '%s' "$b"; return; }
+  done
+}
+
+cmd_run() {
+  local slug="${1:-}"; local dir; dir="$(app_dir "$slug")"
+  [[ -d "$dir" ]] || die "ingen app som heter $slug"
+  validate_app "$dir"
+  local kind entry data
+  kind="$(manifest_get "$dir" .kind web)"
+  entry="$(manifest_get "$dir" .entry)"
+  data="$FORGE_DATA/appdata/$slug"; mkdir -p "$data"
+  export FORGE_APP_DIR="$dir" FORGE_DATA_DIR="$data" FORGE_APP="$slug"
+
+  case "$kind" in
+    web)
+      # Each app gets a stable localhost port so its browser storage
+      # (localStorage, IndexedDB) survives restarts.
+      local server port url
+      server="$(manifest_get "$dir" .server "")"
+      port="$(app_port "$slug")"
+      url="http://127.0.0.1:$port/"
+      [[ -z "$server" ]] && url+="$entry"
+      if ! port_open "$port"; then
+        export PORT="$port"
+        if [[ -n "$server" ]]; then
+          "$FORGE_SHARE/libexec/forge-sandbox" "$dir" "$data" -- bash -c "$server" &
+        else
+          FORGE_SANDBOX_NET=1 "$FORGE_SHARE/libexec/forge-sandbox" "$dir" "$data" -- \
+            python3 -m http.server --bind 127.0.0.1 --directory "$dir" "$port" >/dev/null 2>&1 &
+        fi
+        FORGE_SERVER_PID=$!
+        trap 'kill "$FORGE_SERVER_PID" 2>/dev/null || true' EXIT
+        trap 'exit 130' INT TERM
+        local _i; for _i in $(seq 100); do port_open "$port" && break; sleep 0.1; done
+        port_open "$port" || die "appens server startade inte"
+      fi
+      if [[ "${FORGE_NO_WINDOW:-0}" == 1 ]]; then printf '%s\n' "$url"; wait; return; fi
+      local browser; browser="$(find_browser)"
+      if [[ -n "$browser" ]]; then
+        "$browser" --app="$url" --user-data-dir="$data/browser" --class="forge-$slug" \
+          --no-first-run --no-default-browser-check
+      else
+        xdg-open "$url"
+      fi
+      ;;
+    cli|native)
+      exec "$FORGE_SHARE/libexec/forge-sandbox" "$dir" "$data" -- "$dir/$entry" "${@:2}"
+      ;;
+    *) die "okänd app-typ '$kind'" ;;
+  esac
+}
+
+cmd_undo() {
+  local dir; dir="$(app_dir "${1:-}")"
+  [[ "$(git -C "$dir" rev-list --count HEAD)" -gt 2 ]] || die "inget att ångra"
+  git -C "$dir" -c user.name=Forge -c user.email=forge@localhost revert --no-edit HEAD >/dev/null
+  install_desktop_entry "$1"
+  info "Senaste ändringen ångrad."
+}
+
+cmd_history() {
+  local dir; dir="$(app_dir "${1:-}")"
+  git -C "$dir" log --format='%h  %ar  %s'
+}
+
+cmd_rm() {
+  local slug="${1:-}" dir; dir="$(app_dir "$slug")"
+  [[ -d "$dir" ]] || die "ingen app som heter $slug"
+  confirm "Flytta $slug till papperskorgen?" || return 0
+  mkdir -p "$FORGE_DATA/trash"
+  mv "$dir" "$FORGE_DATA/trash/$slug-$(date +%s)"
+  rm -f "$FORGE_APPLICATIONS/forge-$slug.desktop"
+  info "Borttagen (finns kvar i $FORGE_DATA/trash)."
+}
+
+cmd_share() {
+  local slug="${1:-}" dir; dir="$(app_dir "$slug")"
+  [[ -d "$dir" ]] || die "ingen app som heter $slug"
+  local out="${2:-$PWD/$slug.forgeapp}"
+  git -C "$dir" bundle create "$out" --all -q 2>/dev/null || git -C "$dir" bundle create "$out" --all
+  info "Delbar fil: $out — mottagaren kör 'forge install $(basename "$out")'"
+}
+
+cmd_install() {
+  local file="${1:-}"
+  [[ -f "$file" ]] || die "hittar inte $file"
+  local stage; stage="$(mktemp -d)"
+  git clone -q "$file" "$stage/app"
+  validate_app "$stage/app"
+  local slug; slug="$(slugify "$(manifest_get "$stage/app" .name "$(basename "$file" .forgeapp)")")"
+  [[ ! -e "$FORGE_APPS/$slug" ]] || die "$slug finns redan"
+
+  info "Säkerhetsgranskar appen innan installation…"
+  FORGE_HEADLESS=1 run_agent "$stage/app" "Använd skillen forge-security-review. Granska den här appen som någon annan har delat. Skriv rapporten till REVIEW.md och avsluta med exakt en rad: VERDICT: OK eller VERDICT: RISK." app || true
+  if [[ -f "$stage/app/REVIEW.md" ]]; then
+    cat "$stage/app/REVIEW.md"
+    grep -q 'VERDICT: OK' "$stage/app/REVIEW.md" || info "Granskningen hittade risker."
+    rm -f "$stage/app/REVIEW.md"
+  else
+    info "Ingen granskningsrapport skapades."
+  fi
+  confirm "Installera $slug?" || { rm -rf "$stage"; return 0; }
+  mkdir -p "$FORGE_APPS"
+  mv "$stage/app" "$FORGE_APPS/$slug"
+  rm -rf "$stage"
+  install_desktop_entry "$slug"
+  info "Installerad: forge run $slug"
+}
+
+cmd_sync() {
+  # Personal library: push every app to a private git remote.
+  [[ -n "${FORGE_LIBRARY_REMOTE:-}" ]] || die "sätt FORGE_LIBRARY_REMOTE i $FORGE_CONFIG_FILE, t.ex. git@github.com:dittnamn/"
+  local d slug remote
+  for d in "$FORGE_APPS"/*/; do
+    [[ -f "$d/forge.json" ]] || continue
+    slug="$(basename "$d")"; remote="${FORGE_LIBRARY_REMOTE}forge-app-$slug.git"
+    if ! git -C "$d" remote get-url library >/dev/null 2>&1; then
+      if command -v gh >/dev/null && [[ "$FORGE_LIBRARY_REMOTE" == *github.com* ]]; then
+        gh repo create "forge-app-$slug" --private >/dev/null 2>&1 || true
+      fi
+      git -C "$d" remote add library "$remote"
+    fi
+    info "Synkar $slug"
+    git -C "$d" push -q library HEAD || info "kunde inte synka $slug"
+  done
+}
+
+# --- system: the whole OS as a git repo the agent can edit
+
+system_prompt() { cat <<EOF
+Du redigerar hela operativsystemet Forge OS. Den här katalogen beskriver systemet
+(paket, konfigfiler, Hyprland, tjänster). Användarens önskemål:
+
+"$1"
+
+Följ skillen forge-system-edit. Ändra BARA filer i den här katalogen. Kör aldrig sudo
+och ändra inget direkt i / eller ~ — ändringarna verkställs av 'forge system apply'
+efter att användaren har godkänt diffen. Avsluta med en kort sammanfattning på svenska.
+EOF
+}
+
+cmd_system() {
+  local sub="${1:-}"
+  [[ -d "$FORGE_SYSTEM/.git" ]] || die "$FORGE_SYSTEM finns inte — kör install.sh"
+  case "$sub" in
+    apply)    shift; system_apply "$@" ;;
+    diff)     git -C "$FORGE_SYSTEM" diff HEAD ;;
+    log)      git -C "$FORGE_SYSTEM" log --format='%h  %ar  %s' ;;
+    rollback)
+      git -C "$FORGE_SYSTEM" -c user.name=Forge -c user.email=forge@localhost revert --no-edit HEAD >/dev/null
+      info "Systemändringen återställd i repot. Verkställer…"
+      system_apply
+      ;;
+    ""|*)
+      local change
+      if [[ "$sub" == "edit" ]]; then shift; fi
+      change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Hur vill du ändra systemet? " c; printf '%s' "$c"; fi)"
+      [[ -n "$change" ]] || die "ändringen är tom"
+      git_commit_all "$FORGE_SYSTEM" "forge: osparade ändringar"
+      run_agent "$FORGE_SYSTEM" "$(system_prompt "$change")" system
+      if git -C "$FORGE_SYSTEM" diff --quiet HEAD && [[ -z "$(git -C "$FORGE_SYSTEM" status --porcelain)" ]]; then
+        info "Agenten ändrade inget."; return 0
+      fi
+      git -C "$FORGE_SYSTEM" add -A
+      git -C "$FORGE_SYSTEM" --no-pager diff --cached --stat
+      git -C "$FORGE_SYSTEM" --no-pager diff --cached
+      if confirm "Verkställ den här ändringen av systemet?"; then
+        git_commit_all "$FORGE_SYSTEM" "forge system: $change"
+        system_apply
+      else
+        git -C "$FORGE_SYSTEM" reset -q --hard HEAD
+        git -C "$FORGE_SYSTEM" clean -qfd
+        info "Ändringen kastades."
+      fi
+      ;;
+  esac
+}
+
+system_apply() {
+  # User-level parts (dotfiles) as the user, root parts via sudo.
+  "$FORGE_SHARE/libexec/forge-apply" --user "$FORGE_SYSTEM"
+  if [[ "${1:-}" == "--user" || "${FORGE_SKIP_ROOT:-0}" == 1 ]]; then return 0; fi
+  if [[ $EUID -eq 0 ]]; then
+    "$FORGE_SHARE/libexec/forge-apply" --root "$FORGE_SYSTEM"
+  else
+    sudo "$FORGE_SHARE/libexec/forge-apply" --root "$FORGE_SYSTEM"
+  fi
+  info "Systemet är uppdaterat."
+}
+
+cmd_agent() {
+  local a="${1:-}"
+  if [[ -z "$a" ]]; then printf '%s\n' "$FORGE_AGENT"; return; fi
+  [[ "$a" == claude || "$a" == codex ]] || die "välj claude eller codex"
+  mkdir -p "$(dirname "$FORGE_CONFIG_FILE")"
+  touch "$FORGE_CONFIG_FILE"
+  if grep -q '^FORGE_AGENT=' "$FORGE_CONFIG_FILE"; then
+    sed -i "s/^FORGE_AGENT=.*/FORGE_AGENT=$a/" "$FORGE_CONFIG_FILE"
+  else
+    printf 'FORGE_AGENT=%s\n' "$a" >>"$FORGE_CONFIG_FILE"
+  fi
+  info "Agent: $a"
+}
+
+cmd_doctor() {
+  local c ok=1
+  for c in git jq python3 claude codex bwrap; do
+    if command -v "$c" >/dev/null; then printf '  ✓ %s\n' "$c"; else printf '  ✗ %s\n' "$c"; ok=0; fi
+  done
+  printf '  browser: %s\n' "$(find_browser || true)"
+  printf '  agent:   %s\n' "$FORGE_AGENT"
+  printf '  appar:   %s\n' "$FORGE_APPS"
+  printf '  system:  %s\n' "$FORGE_SYSTEM"
+  [[ $ok == 1 ]]
+}
+
+usage() { cat <<EOF
+forge $FORGE_VERSION — beskriv det du vill ha, så bygger AI:n det.
+
+Appar
+  forge new [--name N] "beskrivning"   bygg en ny app
+  forge edit <app> "ändring"           ändra en app
+  forge run <app>                      starta en app
+  forge list                           lista dina appar
+  forge history <app> / undo <app>     versioner / ångra senaste ändring
+  forge rm <app>                       ta bort (till papperskorgen)
+  forge share <app> [fil]              skapa en .forgeapp att dela
+  forge install <fil.forgeapp>         installera en delad app (granskas först)
+  forge sync                           synka biblioteket till privata git-repon
+
+Systemet
+  forge system "ändring"               låt agenten ändra själva OS:et
+  forge system diff|log|apply [--user]|rollback
+
+Övrigt
+  forge agent [claude|codex]           visa/byt AI-agent
+  forge doctor                         kontrollera beroenden
+EOF
+}
+
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    new) cmd_new "$@" ;;
+    edit) cmd_edit "$@" ;;
+    run) cmd_run "$@" ;;
+    list|ls) cmd_list ;;
+    undo) cmd_undo "$@" ;;
+    history|log) cmd_history "$@" ;;
+    rm|remove) cmd_rm "$@" ;;
+    share) cmd_share "$@" ;;
+    install) cmd_install "$@" ;;
+    sync) cmd_sync ;;
+    system|sys) cmd_system "$@" ;;
+    agent) cmd_agent "$@" ;;
+    doctor) cmd_doctor ;;
+    version|--version) printf 'forge %s\n' "$FORGE_VERSION" ;;
+    help|-h|--help) usage ;;
+    *) usage; exit 1 ;;
+  esac
+}
+
+main "$@"

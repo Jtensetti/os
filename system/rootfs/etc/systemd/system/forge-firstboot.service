@@ -1,0 +1,13 @@
+[Unit]
+Description=Forge OS first boot setup (packages, AI agents)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/forge/firstboot-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/forge/libexec/forge-firstboot
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

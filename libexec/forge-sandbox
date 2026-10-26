@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# forge-sandbox <app-dir> <data-dir> -- <command...>
+#
+# Runs an app process with bubblewrap: it sees the system read-only, its own
+# app and data directories read-write, and only the extra paths and network
+# access its forge.json asks for.
+
+set -euo pipefail
+
+app="$1" data="$2"; shift 2
+[[ "${1:-}" == "--" ]] && shift
+
+if ! command -v bwrap >/dev/null || [[ "${FORGE_NO_SANDBOX:-0}" == 1 ]]; then
+  [[ "${FORGE_NO_SANDBOX:-0}" == 1 ]] || echo "forge: bwrap saknas, kör utan sandlåda" >&2
+  cd "$app" && exec "$@"
+fi
+
+perm() { jq -r "$1 // empty" "$app/forge.json" 2>/dev/null || true; }
+
+args=(
+  --ro-bind /usr /usr --ro-bind /etc /etc
+  --symlink usr/bin /bin --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/sbin /sbin
+  --proc /proc --dev /dev --tmpfs /tmp --tmpfs "$HOME"
+  --bind "$app" "$app" --bind "$data" "$data"
+  --die-with-parent --new-session --unshare-all
+  --setenv HOME "$HOME" --chdir "$app"
+)
+
+# Apps that serve a local web UI need the network namespace so the
+# window can reach them; otherwise network is opt-in.
+if [[ "$(perm .permissions.network)" == true || -n "$(perm .server)" || "${FORGE_SANDBOX_NET:-0}" == 1 ]]; then
+  args+=(--share-net --ro-bind-try /run/systemd/resolve /run/systemd/resolve)
+fi
+
+# Extra folders, e.g. "~/Documents" or "~/Music:ro".
+while IFS= read -r p; do
+  [[ -z "$p" ]] && continue
+  mode=rw
+  if [[ "$p" == *:ro ]]; then mode=ro; p="${p%:ro}"; fi
+  p="${p/#\~/$HOME}"
+  [[ -e "$p" ]] || continue
+  if [[ $mode == ro ]]; then args+=(--ro-bind "$p" "$p"); else args+=(--bind "$p" "$p"); fi
+done < <(jq -r '.permissions.files[]? // empty' "$app/forge.json" 2>/dev/null)
+
+# Optional display access for native GUI apps.
+if [[ "$(perm .permissions.display)" == true ]]; then
+  [[ -n "${XDG_RUNTIME_DIR:-}" && -n "${WAYLAND_DISPLAY:-}" ]] && \
+    args+=(--ro-bind "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" \
+           --setenv XDG_RUNTIME_DIR "$XDG_RUNTIME_DIR" --setenv WAYLAND_DISPLAY "$WAYLAND_DISPLAY")
+  args+=(--dev-bind-try /dev/dri /dev/dri --ro-bind-try /tmp/.X11-unix /tmp/.X11-unix)
+fi
+
+exec bwrap "${args[@]}" "$@"

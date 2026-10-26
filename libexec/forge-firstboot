@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Runs once on first boot (forge-firstboot.service): installs packages and
+# the AI agents from the first user's system repo, with network available.
+set -euo pipefail
+user="$(getent passwd 1000 | cut -d: -f1)"
+home="$(getent passwd 1000 | cut -d: -f6)"
+repo="$home/Forge/system"
+[[ -d "$repo" ]] || repo=/usr/share/forge/system
+/usr/share/forge/libexec/forge-apply --root "$repo"
+mkdir -p /var/lib/forge && touch /var/lib/forge/firstboot-done
+echo "Forge OS first boot klar för $user"

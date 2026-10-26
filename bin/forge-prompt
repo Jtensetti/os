@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# forge-prompt new|edit|system|agent
+#
+# Desktop entry point (bound to Super+A, Super+E, Super+Shift+A): asks for a
+# description in a small popup, then opens a floating terminal where you can
+# watch the agent work and answer its questions.
+
+set -euo pipefail
+
+ask() {
+  local prompt="$1"
+  if command -v fuzzel >/dev/null; then
+    fuzzel --dmenu --lines 0 --width 60 --prompt "$prompt " </dev/null
+  elif command -v wofi >/dev/null; then
+    wofi --dmenu --prompt "$prompt" </dev/null
+  elif command -v zenity >/dev/null; then
+    zenity --entry --title Forge --text "$prompt"
+  else
+    echo "forge-prompt: ingen fuzzel/wofi/zenity hittades" >&2; exit 1
+  fi
+}
+
+pick_app() {
+  forge list | awk '{print $1}' | {
+    if command -v fuzzel >/dev/null; then fuzzel --dmenu --prompt "Vilken app? "; else wofi --dmenu --prompt "Vilken app?"; fi
+  }
+}
+
+focused_app() {
+  # Forge app windows have class "forge-<slug>".
+  command -v hyprctl >/dev/null || return 0
+  hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' | sed -n 's/^forge-//p'
+}
+
+term() {
+  # Run a command in a floating terminal that stays open afterwards.
+  local cmd="$1"
+  local t="${TERMINAL:-}"
+  for c in "$t" alacritty ghostty kitty foot gnome-terminal; do
+    [[ -n "$c" ]] && command -v "$c" >/dev/null && { t="$c"; break; }
+  done
+  local wrapped="$cmd; echo; read -r -p 'Tryck Enter för att stänga…'"
+  case "$t" in
+    alacritty) exec alacritty --class forge-agent -e bash -c "$wrapped" ;;
+    ghostty)   exec ghostty --class=forge-agent -e bash -c "$wrapped" ;;
+    kitty)     exec kitty --class forge-agent bash -c "$wrapped" ;;
+    foot)      exec foot --app-id forge-agent bash -c "$wrapped" ;;
+    *)         exec gnome-terminal --class=forge-agent -- bash -c "$wrapped" ;;
+  esac
+}
+
+q() { printf '%q' "$1"; }
+
+case "${1:-new}" in
+  new)
+    text="$(ask "Beskriv appen du vill ha:")"; [[ -n "$text" ]] || exit 0
+    term "forge new $(q "$text")"
+    ;;
+  edit)
+    app="${2:-$(focused_app)}"; [[ -n "$app" ]] || app="$(pick_app)"; [[ -n "$app" ]] || exit 0
+    text="$(ask "Vad ska ändras i $app?")"; [[ -n "$text" ]] || exit 0
+    term "forge edit $(q "$app") $(q "$text")"
+    ;;
+  system)
+    text="$(ask "Hur vill du ändra systemet?")"; [[ -n "$text" ]] || exit 0
+    term "forge system $(q "$text")"
+    ;;
+  agent)
+    # Open-ended session in the home dir, with all Forge skills loaded.
+    # shellcheck source=/dev/null
+    [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/forge/config" ]] && source "${XDG_CONFIG_HOME:-$HOME/.config}/forge/config"
+    term "cd ~ && ${FORGE_AGENT:-claude}"
+    ;;
+esac

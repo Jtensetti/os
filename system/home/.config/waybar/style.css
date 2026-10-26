@@ -1,0 +1,4 @@
+* { font-family: Inter, sans-serif; font-size: 13px; }
+window#waybar { background: rgba(20, 19, 26, 0.9); color: #ecebf3; }
+#custom-forge { color: #7c5cff; padding: 0 10px; font-weight: 600; }
+#workspaces button.active { color: #7c5cff; }

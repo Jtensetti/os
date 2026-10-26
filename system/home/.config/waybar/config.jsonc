@@ -1,0 +1,14 @@
+{
+  "layer": "top",
+  "height": 28,
+  "modules-left": ["hyprland/workspaces", "custom/forge"],
+  "modules-center": ["clock"],
+  "modules-right": ["pulseaudio", "network", "battery"],
+  "custom/forge": {
+    "format": "✦ Bygg",
+    "tooltip-format": "Beskriv en app (Super+A)",
+    "on-click": "forge-prompt new",
+    "on-click-right": "forge-prompt system"
+  },
+  "clock": { "format": "{:%a %d %b  %H:%M}" }
+}

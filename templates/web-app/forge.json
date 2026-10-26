@@ -1,0 +1,11 @@
+{
+  "name": "app",
+  "description": "",
+  "kind": "web",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "permissions": {
+    "network": false,
+    "files": []
+  }
+}

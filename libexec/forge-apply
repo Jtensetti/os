@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# forge-apply --user|--root <system-repo>
+#
+# Makes the machine match the system repo. Idempotent: run it as often as
+# you like. Things Forge put there earlier but that are gone from the repo
+# (files, packages, services) are removed again.
+#
+#   packages/apt.list      apt packages, one per line
+#   packages/flatpak.list  Flathub app ids
+#   rootfs/                copied onto /         (root part)
+#   home/                  copied onto $HOME     (user part)
+#   services/system.list   systemd units to enable (root part)
+#   services/user.list     systemd --user units to enable (user part)
+#   hooks/root/*.sh        run as root after each apply
+#   hooks/user/*.sh        run as the user after each apply
+
+set -euo pipefail
+
+mode="${1:-}" repo="${2:-}"
+[[ -d "$repo" ]] || { echo "usage: forge-apply --user|--root <system-repo>" >&2; exit 2; }
+repo="$(cd "$repo" && pwd)"
+
+# Prefix for tests: FORGE_ROOT=/tmp/x installs into /tmp/x instead of /.
+ROOT="${FORGE_ROOT:-}"
+FORGE_SHARE="${FORGE_SHARE:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+export FORGE_SHARE
+log() { printf '  · %s\n' "$*" >&2; }
+
+read_list() { [[ -f "$1" ]] && sed 's/#.*//; s/[[:space:]]*$//; /^[[:space:]]*$/d' "$1" || true; }
+
+# sync_tree <src> <dest> <state-file>: copy files, remove ones dropped since last time.
+sync_tree() {
+  local src="$1" dest="$2" state="$3" new
+  mkdir -p "$(dirname "$state")"
+  new="$(mktemp)"
+  if [[ -d "$src" ]]; then
+    (cd "$src" && find . -type f -o -type l | sed 's|^\./||' | sort) >"$new"
+    local f
+    while IFS= read -r f; do
+      mkdir -p "$dest/$(dirname "$f")"
+      cp -a --remove-destination "$src/$f" "$dest/$f"
+    done <"$new"
+  fi
+  if [[ -f "$state" ]]; then
+    local old
+    while IFS= read -r old; do
+      [[ -z "$old" ]] && continue
+      if ! grep -qxF -- "$old" "$new"; then
+        log "tar bort $dest/$old"
+        rm -f -- "$dest/$old"
+      fi
+    done <"$state"
+  fi
+  mv "$new" "$state"
+}
+
+# removed <state-file> <current-list>: print entries that disappeared.
+removed() { [[ -f "$1" ]] && comm -23 <(sort -u "$1") <(printf '%s\n' "$2" | sed '/^$/d' | sort -u) || true; }
+
+run_hooks() {
+  local dir="$1" h
+  [[ -d "$dir" ]] || return 0
+  for h in "$dir"/*.sh; do
+    [[ -f "$h" ]] || continue
+    log "hook $(basename "$h")"
+    FORGE_SYSTEM="$repo" FORGE_ROOT="$ROOT" bash "$h"
+  done
+}
+
+apply_user() {
+  local state="${XDG_STATE_HOME:-$HOME/.local/state}/forge"
+  log "dotfiles → $HOME"
+  sync_tree "$repo/home" "$HOME" "$state/home.files"
+
+  if [[ -z "${FORGE_SKIP_SERVICES:-}" ]] && command -v systemctl >/dev/null; then
+    local units u
+    units="$(read_list "$repo/services/user.list")"
+    for u in $units; do systemctl --user enable --now "$u" 2>/dev/null || log "kunde inte starta $u"; done
+    for u in $(removed "$state/user.units" "$units"); do systemctl --user disable --now "$u" 2>/dev/null || true; done
+    printf '%s\n' "$units" >"$state/user.units"
+  fi
+  run_hooks "$repo/hooks/user"
+}
+
+apply_root() {
+  [[ $EUID -eq 0 || -n "$ROOT" ]] || { echo "forge-apply --root måste köras som root" >&2; exit 1; }
+  local state="$ROOT/var/lib/forge"
+  mkdir -p "$state"
+
+  if command -v snapper >/dev/null && [[ -z "$ROOT" ]]; then
+    snapper create --description "forge apply $(git -C "$repo" rev-parse --short HEAD 2>/dev/null)" 2>/dev/null \
+      && log "snapshot skapad (snapper)"
+  fi
+
+  if [[ -z "${FORGE_SKIP_PACKAGES:-}" ]]; then
+    local apt flat p missing=()
+    apt="$(read_list "$repo/packages/apt.list")"
+    for p in $apt; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
+    if ((${#missing[@]})); then
+      log "apt install ${missing[*]}"
+      apt-get update -qq || true
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"; then
+        # One bad package name should not block the rest.
+        for p in "${missing[@]}"; do
+          DEBIAN_FRONTEND=noninteractive apt-get install -y "$p" || log "kunde inte installera $p"
+        done
+      fi
+    fi
+    local gone; gone="$(removed "$state/apt.list" "$apt")"
+    if [[ -n "$gone" ]]; then
+      log "apt remove $gone"
+      # shellcheck disable=SC2086
+      DEBIAN_FRONTEND=noninteractive apt-get remove -y $gone || true
+    fi
+    printf '%s\n' "$apt" >"$state/apt.list"
+
+    if command -v flatpak >/dev/null; then
+      flat="$(read_list "$repo/packages/flatpak.list")"
+      [[ -n "$flat" ]] && flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      for p in $flat; do flatpak info "$p" >/dev/null 2>&1 || flatpak install -y --noninteractive flathub "$p"; done
+      for p in $(removed "$state/flatpak.list" "$flat"); do flatpak uninstall -y --noninteractive "$p" || true; done
+      printf '%s\n' "$flat" >"$state/flatpak.list"
+    fi
+  fi
+
+  log "rootfs → ${ROOT:-/}"
+  sync_tree "$repo/rootfs" "${ROOT:-}" "$state/rootfs.files"
+
+  if [[ -z "${FORGE_SKIP_SERVICES:-}" ]] && command -v systemctl >/dev/null && [[ -z "$ROOT" ]]; then
+    local units u
+    units="$(read_list "$repo/services/system.list")"
+    systemctl daemon-reload
+    # FORGE_NO_START=1 (install on a running desktop): enable for next boot only,
+    # so e.g. greetd does not take over the screen mid-install.
+    local now=(--now); [[ "${FORGE_NO_START:-0}" == 1 ]] && now=()
+    for u in $units; do systemctl enable "${now[@]}" "$u" || log "kunde inte aktivera $u"; done
+    for u in $(removed "$state/system.units" "$units"); do systemctl disable --now "$u" || true; done
+    printf '%s\n' "$units" >"$state/system.units"
+  fi
+  run_hooks "$repo/hooks/root"
+}
+
+case "$mode" in
+  --user) apply_user ;;
+  --root) apply_root ;;
+  *) echo "usage: forge-apply --user|--root <system-repo>" >&2; exit 2 ;;
+esac

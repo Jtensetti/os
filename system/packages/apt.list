@@ -1,0 +1,42 @@
+# Forge OS — apt-paket. En per rad. Ta bort en rad så avinstalleras paketet
+# vid nästa 'forge system apply' (bara paket som Forge själv har lagt till).
+
+# Skrivbord (Omarchy-stil: Hyprland + tangentbordet först)
+greetd
+tuigreet
+hyprland
+hyprpaper
+hypridle
+hyprlock
+xdg-desktop-portal-hyprland
+waybar
+fuzzel
+mako-notifier
+alacritty
+grim
+slurp
+wl-clipboard
+brightnessctl
+playerctl
+network-manager
+blueman
+pipewire
+wireplumber
+fonts-inter
+fonts-jetbrains-mono
+fonts-noto-color-emoji
+
+# Forge-kärnan
+git
+jq
+curl
+bubblewrap
+python3
+nodejs
+npm
+flatpak
+chromium-browser   # används som app-fönster för webbappar
+
+# Säkerhetsnät
+btrfs-progs
+snapper

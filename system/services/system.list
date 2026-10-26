@@ -1,0 +1,5 @@
+# systemd-tjänster (system) som ska vara aktiva
+NetworkManager.service
+bluetooth.service
+greetd.service
+forge-firstboot.service

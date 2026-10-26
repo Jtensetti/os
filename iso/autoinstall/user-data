@@ -1,0 +1,23 @@
+#cloud-config
+# Ubuntu autoinstall for Forge OS. The installer asks for language, keyboard,
+# user and network; everything else is automatic.
+autoinstall:
+  version: 1
+  interactive-sections:
+    - locale
+    - keyboard
+    - identity
+    - network
+    - storage
+  locale: sv_SE.UTF-8
+  keyboard:
+    layout: se
+  storage:
+    layout:
+      name: lvm
+  packages:
+    - git
+    - jq
+  late-commands:
+    - cp -a /cdrom/forge /target/opt/forge-src
+    - curtin in-target --target=/target -- env FORGE_DEFER=1 bash /opt/forge-src/install.sh
