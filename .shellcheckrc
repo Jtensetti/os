@@ -1,0 +1,2 @@
+# The "a && b || true" idiom is intentional throughout (best-effort steps).
+disable=SC2015
