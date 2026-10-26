@@ -69,11 +69,12 @@ build() {
   cat >>"$root/etc/greetd/config.toml" <<EOF
 
 [initial_session]
-command = "Hyprland"
+command = "sh -c 'Hyprland >/var/tmp/hyprland.log 2>&1'"
 user = "$user"
 EOF
   in_root "sudo -u $user -H bash -s" <<'EOF'
 cd ~/Forge/system
+grep -q 'VM-test' home/.config/hypr/hyprland.conf && exit 0
 cat >> home/.config/hypr/hyprland.conf <<'CONF'
 
 # --- VM-test: öppna några fönster så att skärmdumpen visar skrivbordet
@@ -83,7 +84,8 @@ CONF
 git -c user.name=t -c user.email=t@t commit -qam "VM-test"
 EOF
   mkdir -p "$root/home/$user/Apps"
-  in_root "sudo -u $user -H env FORGE_AGENT_CMD=/opt/forge-src/tests/vm/demo-agent forge new --name Fokus 'fokustimer' >/dev/null"
+  [[ -d "$root/home/$user/Apps/fokus" ]] || \
+    in_root "sudo -u $user -H env FORGE_AGENT_CMD=/opt/forge-src/tests/vm/demo-agent forge new --name Fokus 'fokustimer' >/dev/null"
   printf '/dev/vda / ext4 defaults 0 1\n' >"$root/etc/fstab"
   printf 'forge-vm\n' >"$root/etc/hostname"
   umount_root
@@ -114,6 +116,8 @@ boot() {
   done
   printf 'system_powerdown\n' | socat - "UNIX-CONNECT:$work/mon.sock" >/dev/null 2>&1 || true
   sleep 20; kill "$qpid" 2>/dev/null || true
+  # Pull logs out of the disk image for debugging.
+  debugfs -R "cat /var/tmp/hyprland.log" "$work/disk.img" >"$work/hyprland.log" 2>/dev/null || true
   for f in "$work"/shot-*.ppm; do
     [[ -f "$f" ]] && python3 - "$f" <<'PY'
 import sys, zlib, struct

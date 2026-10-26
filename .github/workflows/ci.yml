@@ -18,6 +18,7 @@ jobs:
     steps:
       - run: apt-get update && apt-get install -y git sudo
       - uses: actions/checkout@v4
-      - run: useradd -m -u 1000 -s /bin/bash -G sudo testare
-      - run: FORGE_USER=testare FORGE_WITH_OLLAMA=0 ./install.sh
-      - run: tests/install-check.sh testare
+      # The image already has the uid-1000 user "ubuntu", like a fresh install.
+      - run: id ubuntu || useradd -m -u 1000 -s /bin/bash ubuntu
+      - run: FORGE_USER=ubuntu FORGE_WITH_OLLAMA=0 ./install.sh
+      - run: tests/install-check.sh ubuntu

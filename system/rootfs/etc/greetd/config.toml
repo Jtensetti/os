@@ -1,5 +1,5 @@
 [terminal]
-vt = 1
+vt = 7  # Ubuntus greetd.service är byggd för tty7 (Conflicts=getty@tty7)
 
 [default_session]
 command = "tuigreet --time --remember --cmd Hyprland"
