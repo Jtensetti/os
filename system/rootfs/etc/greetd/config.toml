@@ -1,5 +1,7 @@
+# greetd's parser does not allow comments on the same line as a value.
+# Ubuntu's greetd.service is built for tty7 (Conflicts=getty@tty7).
 [terminal]
-vt = 7  # Ubuntus greetd.service är byggd för tty7 (Conflicts=getty@tty7)
+vt = 7
 
 [default_session]
 command = "tuigreet --time --remember --cmd Hyprland"

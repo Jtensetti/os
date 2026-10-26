@@ -62,7 +62,8 @@ cd "$1" && sed -i 's|<h1>.*</h1>|<h1>Installationstest</h1>|' index.html
 EOF
 as_user env FORGE_AGENT_CMD="$fake" forge new "installationstest" >/dev/null 2>&1
 check "forge new" test -f "$home/Apps/installationstest/forge.json"
-as_user env FORGE_NO_WINDOW=1 forge run installationstest >"$fake.url" 2>/dev/null &
+# timeout inside sudo: sudo does not relay signals from its own process group.
+as_user env FORGE_NO_WINDOW=1 timeout 30 forge run installationstest >"$fake.url" 2>/dev/null &
 for _ in $(seq 50); do [[ -s "$fake.url" ]] && break; sleep 0.2; done
 url="$(cat "$fake.url" 2>/dev/null)"
 if curl -fs --noproxy '*' "$url" 2>/dev/null | grep -q Installationstest; then

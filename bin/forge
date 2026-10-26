@@ -245,6 +245,7 @@ find_browser() {
   for b in "${FORGE_BROWSER:-}" chromium chromium-browser google-chrome brave-browser microsoft-edge; do
     [[ -n "$b" ]] && command -v "$b" >/dev/null && { printf '%s' "$b"; return; }
   done
+  return 0
 }
 
 cmd_run() {
@@ -282,8 +283,13 @@ cmd_run() {
         local _i; for _i in $(seq 100); do port_open "$port" && break; sleep 0.1; done
         port_open "$port" || die "appens server startade inte"
       fi
-      if [[ "${FORGE_NO_WINDOW:-0}" == 1 ]]; then printf '%s\n' "$url"; wait; return; fi
-      local browser; browser="$(find_browser)"
+      if [[ "${FORGE_NO_WINDOW:-0}" == 1 ]]; then
+        # Serve until stopped. Short sleeps keep signal traps responsive.
+        printf '%s\n' "$url"
+        while [[ -n "${FORGE_SERVER_PID:-}" ]] && kill -0 "$FORGE_SERVER_PID" 2>/dev/null; do sleep 0.5; done
+        return
+      fi
+      local browser; browser="$(find_browser || true)"
       if [[ "${FORGE_WINDOW:-auto}" != browser ]] && have_webview; then
         # Native GTK/WebKit window: app id forge.app.<slug>, storage in $data.
         /usr/bin/python3 "$FORGE_SHARE/libexec/forge-webview" "$slug" "$url" "$data"
