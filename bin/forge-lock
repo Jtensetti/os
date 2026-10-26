@@ -3,6 +3,10 @@
 # runs on software rendering (VMs without 3D), where hyprlock cannot draw and
 # would leave a black, unlockable-looking screen.
 set -euo pipefail
+# logind can ask twice at once (idle + before-sleep); one locker only.
+# The locker inherits fd 9, so the lock is held for as long as it runs.
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/forge-lock.lock"
+flock -n 9 || exit 0
 pidof hyprlock swaylock >/dev/null && exit 0
 log="${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-none}/hyprland.log"
 if [[ -f "$log" ]] && grep -qm1 'Renderer: llvmpipe' "$log" && command -v swaylock >/dev/null; then

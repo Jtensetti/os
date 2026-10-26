@@ -74,16 +74,17 @@ user = "$user"
 EOF
   in_root "sudo -u $user -H bash -s" <<'EOF'
 cd ~/Forge/system
-grep -q 'VM-test' home/.config/hypr/hyprland.conf && exit 0
+# Lock after 4 idle minutes so the screenshots also cover the lock screen.
+sed -i 's/timeout = 600/timeout = 240/' home/.config/hypr/hypridle.conf
+if ! grep -q 'VM-test' home/.config/hypr/hyprland.conf; then
 cat >> home/.config/hypr/hyprland.conf <<'CONF'
 
 # --- VM-test: öppna några fönster så att skärmdumpen visar skrivbordet
 exec-once = sleep 8 && alacritty -e bash -c 'forge list; echo; forge theme; echo; forge agent; exec bash'
 exec-once = sleep 12 && forge run fokus
 CONF
-# Lock after 4 idle minutes so the screenshots also cover the lock screen.
-sed -i 's/timeout = 600/timeout = 240/' home/.config/hypr/hypridle.conf
-git -c user.name=t -c user.email=t@t commit -qam "VM-test"
+fi
+git -c user.name=t -c user.email=t@t commit -qam "VM-test" || true
 EOF
   mkdir -p "$root/home/$user/Apps"
   [[ -d "$root/home/$user/Apps/fokus" ]] || \
