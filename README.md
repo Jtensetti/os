@@ -5,9 +5,9 @@ Appar *och* själva operativsystemet. Allt sparas, versioneras och går att ång
 
 ![Forge OS-skrivbordet](docs/img/desktop.png)
 
-<sub>Skärmdump från en riktig Wayland-session med Forges egna konfigfiler, temat `forge`,
-Waybar, Alacritty, fuzzel, mako och exempelappen Fokus. Den här testmiljön kör sway i stället för
-Hyprland, så rundade hörn, blur och animationer syns inte här — dem får du på en riktig installation.</sub>
+<sub>Riktig skärmdump: Forge OS installerat på Ubuntu 26.04 och uppstartat i en virtuell maskin
+(`tests/vm/run.sh`) — greetd, Hyprland 0.53, Waybar, temat `forge` och exempelappen Fokus i sitt
+eget fönster. Maskinen saknar grafikkort och ritar i mjukvara.</sub>
 
 > Arbetsnamn. Byggt på Ubuntu LTS (stabilt), med ett Omarchy-inspirerat Hyprland-skrivbord
 > (snyggt, tangentbordet först) och Claude Code + Codex inbyggda (vibe) — i molnet eller lokalt.
