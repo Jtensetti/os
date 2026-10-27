@@ -44,7 +44,20 @@ def load_theme(repo: Path, name: str) -> dict:
     for key, val in defaults.items():
         values.setdefault(key, val)
     values["wallpaper"] = find_wallpaper(repo, values.get("wallpaper", f"{name}.jpg"))
+    values["locale"] = system_locale()
     return values
+
+
+def system_locale() -> str:
+    # The language chosen at install (e.g. sv_SE.UTF-8), for dates in the panel.
+    for path in ("/etc/default/locale", "/etc/locale.conf"):
+        try:
+            for line in Path(path).read_text().splitlines():
+                if line.startswith("LANG="):
+                    return line.split("=", 1)[1].strip().strip('"') or "C.UTF-8"
+        except OSError:
+            pass
+    return os.environ.get("LANG") or "C.UTF-8"
 
 
 def find_wallpaper(repo: Path, ref: str) -> str:

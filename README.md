@@ -19,6 +19,18 @@ Super+Shift+A    "gör allt mörkare och byt Super+W till Super+Q"  → ändrar 
 Super+Shift+T    nästa tema                                        → hela systemet + alla appar
 ```
 
+### Testat från ISO till skrivbord
+
+En färsk installation från Forges ISO i en virtuell maskin: inloggning (greetd), **Super+A** och
+Forges agentfönster som startar `forge new`.
+
+| Inloggning | Super+A | Agentfönstret |
+|---|---|---|
+| ![](docs/img/iso-greeter.png) | ![](docs/img/iso-prompt.png) | ![](docs/img/iso-agent.png) |
+
+<sub>Testmaskinen saknar HTTPS-åtkomst, därför installerades inte Claude Code där (meddelandet i
+sista bilden). På en vanlig dator installeras agenterna vid första uppstarten.</sub>
+
 ## Teman
 
 ![De tio inbyggda temana](docs/img/themes.jpg)

@@ -15,7 +15,7 @@ fail() { printf '  ✗ %s\n' "$1" >&2; exit 1; }
 
 echo "Appar"
 forge new "En enkel anteckningsapp med taggar" 2>/dev/null
-app="en-enkel-anteckningsapp-med"
+app="enkel-anteckningsapp-taggar"
 [[ -f "$HOME/Apps/$app/forge.json" ]] && ok "new skapar appen" || fail "new"
 grep -q "Byggd av agenten" "$HOME/Apps/$app/index.html" && ok "agenten körs i appkatalogen" || fail "agent"
 [[ -f "$XDG_DATA_HOME/applications/forge-$app.desktop" ]] && ok "desktop-fil skapas" || fail "desktop"
@@ -35,6 +35,13 @@ forge undo "$app" 2>/dev/null
 grep -q "Byggd av agenten" "$HOME/Apps/$app/index.html" && ok "undo" || fail "undo"
 
 forge edit "../etc" "x" 2>/dev/null && fail "path traversal" || ok "ogiltiga appnamn avvisas"
+count_apps() { find "$HOME/Apps" -mindepth 1 -maxdepth 1 | wc -l; }
+before="$(count_apps)"
+# "local" needs ollama, which is not installed here: the agent is missing.
+FORGE_AGENT_CMD='' FORGE_AGENT=local forge new "en app som visar dagens agenda" >/dev/null 2>&1 && fail "missing agent" || true
+[[ "$(count_apps)" == "$before" ]] && ok "saknad agent: inget skapas" || fail "dir created without agent"
+forge new "En app som visar dagens agenda" >/dev/null 2>&1
+[[ -d "$HOME/Apps/visar-dagens-agenda" ]] && ok "bra appnamn utan utfyllnadsord" || fail "slug: $(ls "$HOME/Apps")"
 
 forge share "$app" "$t/a.forgeapp" 2>/dev/null
 [[ -f "$t/a.forgeapp" ]] && ok "share" || fail "share"

@@ -14,7 +14,7 @@ och ändra **aldrig** direkt i `/` eller `~`.
 | Installera/ta bort program | `packages/apt.list`, `packages/flatpak.list` (en per rad) |
 | Kortkommandon, fönster, skärmar, tangentbord | `home/.config/hypr/hyprland.conf` |
 | Färger, tema, bakgrund | `theme/` — se skillen forge-theme |
-| Panelens innehåll | `home/.config/waybar/config.jsonc` (stilen: `theme/templates/.config/waybar/`) |
+| Panelen (innehåll och stil) | `theme/templates/.config/waybar/config.jsonc.tmpl` och `style.css.tmpl` |
 | Appstartare, notiser, terminal, låsskärm (utseende) | `theme/templates/.config/…` |
 | Lokal AI | se skillen forge-local-ai |
 | Systemfiler i `/etc` m.m. | `rootfs/<sökväg>` (speglas till `/`) |

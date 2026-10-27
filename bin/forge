@@ -38,8 +38,13 @@ slugify() {
   python3 - "$1" <<'PY'
 import re, sys, unicodedata
 s = unicodedata.normalize("NFKD", sys.argv[1]).encode("ascii", "ignore").decode().lower()
-words = [w for w in re.split(r"[^a-z0-9]+", s) if w][:4]
-print("-".join(words) or "app", end="")
+words = [w for w in re.split(r"[^a-z0-9]+", s) if w]
+# Drop filler words so "en app som visar dagens agenda" becomes "visar-dagens-agenda".
+filler = {"en", "ett", "app", "appen", "applikation", "program", "som", "for", "med", "och", "att",
+          "jag", "vill", "ha", "gor", "en", "pa", "till", "the", "a", "an", "that", "with", "to", "of",
+          "for", "and", "make", "build", "me", "i", "want"}
+kept = [w for w in words if w not in filler] or words
+print("-".join(kept[:4]) or "app", end="")
 PY
 }
 
@@ -56,6 +61,14 @@ git_commit_all() {
   git -C "$dir" diff --cached --quiet && return 0
   git -C "$dir" -c user.name="${GIT_AUTHOR_NAME:-Forge}" -c user.email="${GIT_AUTHOR_EMAIL:-forge@localhost}" \
     commit -q -m "$msg"
+}
+
+# Fail early, before anything is created, if the chosen agent is missing.
+need_agent() {
+  [[ -n "${FORGE_AGENT_CMD:-}" ]] && return 0
+  local engine="$FORGE_AGENT"
+  if [[ "$engine" == local ]]; then engine="${FORGE_LOCAL_ENGINE:-codex}"; need ollama; fi
+  command -v "$engine" >/dev/null 2>&1 || die "AI-agenten '$engine' är inte installerad än. Kör 'forge doctor' (den installeras vid första uppstarten när datorn har internet)."
 }
 
 # Run the configured coding agent in a directory. With an empty prompt the
@@ -188,6 +201,7 @@ cmd_new() {
   if [[ "${1:-}" == "--name" ]]; then name="$2"; shift 2; fi
   local desc; desc="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Beskriv appen: " d; printf '%s' "$d"; fi)"
   [[ -n "$desc" ]] || die "beskrivningen är tom"
+  need_agent
   local slug; slug="$(slugify "${name:-$desc}")"
   local base="$slug" n=2
   while [[ -e "$FORGE_APPS/$slug" ]]; do slug="$base-$n"; n=$((n + 1)); done
@@ -215,6 +229,7 @@ cmd_edit() {
   [[ -d "$dir" ]] || die "ingen app som heter $slug"
   local change; change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Vad ska ändras? " c; printf '%s' "$c"; fi)"
   [[ -n "$change" ]] || die "ändringen är tom"
+  need_agent
   git_commit_all "$dir" "forge: osparade ändringar"
   run_agent "$dir" "$(app_prompt edit "$change")"
   validate_app "$dir"
@@ -413,6 +428,7 @@ cmd_system() {
       if [[ "$sub" == "edit" ]]; then shift; fi
       change="$(if [[ $# -gt 0 ]]; then printf '%s' "$*"; else read -r -p "Hur vill du ändra systemet? " c; printf '%s' "$c"; fi)"
       [[ -n "$change" ]] || die "ändringen är tom"
+      need_agent
       git_commit_all "$FORGE_SYSTEM" "forge: osparade ändringar"
       run_agent "$FORGE_SYSTEM" "$(system_prompt "$change")"
       if git -C "$FORGE_SYSTEM" diff --quiet HEAD && [[ -z "$(git -C "$FORGE_SYSTEM" status --porcelain)" ]]; then

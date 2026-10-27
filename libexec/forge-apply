@@ -41,7 +41,7 @@ sync_tree() {
       # Keep mode and timestamps, but never the repo owner: files under /
       # must belong to root even though the user owns ~/Forge/system.
       cp -P --preserve=mode,timestamps --remove-destination "$src/$f" "$dest/$f"
-      if [[ $EUID -eq 0 && "$dest" != "$HOME" ]]; then chown -h root:root "$dest/$f"; fi
+      if [[ $EUID -eq 0 && "$dest" != "${HOME:-}" ]]; then chown -h root:root "$dest/$f"; fi
     done <"$new"
   fi
   if [[ -f "$state" ]]; then
